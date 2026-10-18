@@ -2,6 +2,7 @@ export const REALTIME_CHANNELS = {
   votes: 'votes-changes',
   candidates: 'candidates-changes',
   kiosks: 'kiosks-changes',
+  kioskSessions: 'kiosk-sessions-changes',
   election: 'election-broadcast',
 } as const;
 

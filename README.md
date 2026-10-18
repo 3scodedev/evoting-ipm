@@ -2,8 +2,8 @@
 
 Aplikasi e-voting berbasis web untuk pemilihan Ketua IPM dengan sistem **Bilik Suara Terpusat (Kiosk Mode)** + **Live Dashboard Command Center**.
 
-- Pemilih mencoblos di device bilik panitia (tanpa HP pribadi): input NISN/NIP → konfirmasi identitas → surat suara digital → sukses + auto-reset 3 detik.
-- Admin pantau real-time: perolehan suara (Bar/Donut), status bilik Live/Offline, Start/Pause/Stop terpusat, kelola DPT + kandidat + cetak Berita Acara.
+ - masuk bilik → pilih kandidat → surat suara digital → sukses + auto-reset 3 detik.
+- Admin pantau real-time: perolehan suara (Bar/Donut), status bilik Live/Offline, Start/Pause/Stop terpusat, kelola kandidat + cetak Berita Acara.
 
 ## Tech Stack
 
@@ -98,8 +98,7 @@ Isinya: 3 bilik (`bilik-lab-1`, `bilik-lab-2`, `bilik-aula`, password semua `Bil
 Varian:
 
 ```bash
-bun run seed:references   # hanya bilik + kandidat
-bun run seed:demo          # hanya 50 voters demo
+bun run seed:references   # bilik + kandidat
 bun run seed:reset-votes   # cetak SQL reset hasil gladi (TRUNCATE votes + reset counter)
 ```
 
@@ -115,15 +114,15 @@ Buka http://localhost:3000, cek health: http://localhost:3000/api/health → `{"
 |---|---|
 | `/` | Landing (link ke bilik & command center) |
 | `/kiosk/login` | Login bilik (pakai kredensial seed, mis. `bilik-lab-1` / `Bilik#123`) |
-| `/kiosk/vote` | Standby input NISN/NIP + modal identitas |
-| `/kiosk/ballot` | Surat suara (wajib lewat verifikasi dulu) |
-| `/admin/login` | Login admin (akun dari langkah 2.3) |
+ | `/kiosk/vote` | Autoredirect ke surat suara |
+ | `/kiosk/ballot` | Surat suara (langsung masuk setelah login bilik) |
+ | `/admin/login` | Login admin (akun dari langkah 2.3) |
 | `/admin/dashboard` | Live analytics + Start/Pause/Stop |
-| `/admin/kiosks`, `/admin/voters`, `/admin/candidates`, `/admin/reports` | CRUD + import + laporan |
+| `/admin/kiosks`, `/admin/candidates`, `/admin/reports` | CRUD bilik + kandidat + laporan |
 
 **Alur coba cepat (local):**
 1. Login admin → `/admin/dashboard` → klik **Start**.
-2. Di tab lain login bilik → input salah satu NISN demo → **Ya, Lanjutkan** → pilih kandidat → **Ya, Kirim Suara** → sukses auto-reset 3 detik.
+ 2. login bilik → pilih kandidat → Ya, Kirim Suara → sukses auto-reset 3 detik.
 3. Kembali ke dashboard: angka + grafik naik tanpa refresh. Klik **Stop** → semua bilik terkunci → `/admin/reports` bisa cetak Berita Acara.
 
 ### Scripts
@@ -135,7 +134,8 @@ Buka http://localhost:3000, cek health: http://localhost:3000/api/health → `{"
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run lint` | Next lint |
 | `bun test` | Unit test (Bun test) |
-| `bun run seed*` | Seed demo (lihat varian di atas) |
+| `bun run seed*` | Seed data awal (lihat varian di atas) |
+| `bun run backup` | Backup semua tabel ke `backups/<timestamp>/*.json` (wajib sebelum & sesudah hari-H, free plan tanpa backup otomatis) |
 
 ---
 
@@ -181,6 +181,9 @@ bunx vercel --prod
 - Setiap push ke branch utama = deploy production otomatis; Pull Request = preview deployment terpisah (aman untuk gladi).
 - Rollback: **Vercel → Deployments → pilih deployment lama → Promote to Production** (< 3 menit). Untuk DB, restore dari backup `pg_dump` sebelum Stop, lalu jalankan down/up migration bila perlu.
 - Jangan pernah expose `SUPABASE_SERVICE_ROLE_KEY` ke client / prefix `NEXT_PUBLIC_` / commit ke git.
+- **Anti-pause Supabase free:** project free di-pause setelah 7 hari tanpa aktivitas. `vercel.json` sudah punya cron harian ke `/api/health` (Hobby: 1×/hari, dijalankan dalam window ±1 jam). Disarankan tambah monitor eksternal gratis (mis. UptimeRobot, interval 5 menit) ke `/api/health` — sekaligus dapat alert kalau app down di hari-H.
+- **Backup manual (wajib di free plan):** tidak ada backup otomatis. Jalankan `bun run backup` dari laptop (pakai `.env.local` production) sebelum dan sesudah hari-H. Folder `backups/` sudah di-`.gitignore` karena berisi data sensitif.
+- **Foto kandidat otomatis dikompres** (≤800px, WebP q72) saat upload lewat admin, plus `Cache-Control` 1 tahun — jadi egress Supabase tetap kecil walau ribuan pemilih membuka surat suara. Foto lama yang sudah terunggah sebelum fitur ini perlu di-upload ulang agar ikut terkompres.
 
 ---
 
@@ -190,8 +193,8 @@ bunx vercel --prod
 |---|---|
 | `bun install` lama/timeout | Deps Next.js besar → ulangi dengan koneksi stabil, atau `bun install --no-progress` |
 | `/api/health` → `db_reachable: false` | URL/anon key salah → cek `.env.local`, restart `bun dev` |
+| Project Supabase mendadak error / tak bisa dibuka | Free plan di-pause karena 7 hari tanpa aktivitas → **Unpause** di dashboard Supabase, pastikan cron `/api/health` + monitor eksternal jalan |
 | Login bilik 401 terus | Username case-sensitive (lowercase) / password salah → cek tabel `kiosks`, atau re-seed |
-| `lookupVoter` 429 | Rate limit 10/menit/kiosk → tunggu 1 menit (by design anti brute-force NISN) |
 | Vote → `ELECTION_CLOSED` | Status masih `pause` → admin klik **Start** di dashboard |
 | Dashboard tidak live | Realtime belum diaktifkan untuk tabel / anon key salah → cek Replication + env |
 | Foto kandidat tidak tampil | Bucket belum ada / bukan private + policy → buat bucket `candidates`, cek `SIGNED_URL_TTL` |

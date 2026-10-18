@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { supabaseService, supabaseServer } from '@/lib/supabase/server';
-import { hashPassword, slugify, randomKioskPassword } from '@/lib/auth-kiosk';
+import { hashPassword, randomKioskPassword } from '@/lib/auth-kiosk';
 import { ok, fail } from '@/lib/api-response';
 
 async function requireAdmin() {
@@ -16,81 +16,96 @@ async function requireAdmin() {
   return { user: null as never, debug };
 }
 
-export async function createKiosk(input: { kiosk_name: string }) {
-  const parsed = z.object({ kiosk_name: z.string().min(3).max(60) }).safeParse(input);
-  if (!parsed.success) return fail('VALIDATION_ERROR', 'Nama bilik minimal 3 karakter');
+/** Token bilik: 8 huruf kapital, tetap sama sampai admin klik Generate Token. */
+export async function generateKioskToken() {
   const adm = await requireAdmin();
   if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
   const admin = adm.user;
-  const username = slugify(parsed.data.kiosk_name) || `bilik-${Date.now()}`;
-  const plain = randomKioskPassword();
   const db = supabaseService();
-  const { data, error } = await db
+  const token = randomKioskPassword(8);
+  const password_hash = await hashPassword(token);
+  // Deterministic: when the legacy seeding leaves multiple active rows, always choose the same master
+  const { data: master } = await db
     .from('kiosks')
-    .insert({ kiosk_name: parsed.data.kiosk_name, username, password_hash: await hashPassword(plain) })
-    .select('id, username, kiosk_name')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(1)
     .single();
-  if (error) return fail('INTERNAL_ERROR', error.message);
-  await db.from('audit_logs').insert({ actor: admin.email ?? admin.id, action: 'create_kiosk', meta: { username } });
-  return ok({ ...data, password_plain_once: plain });
-}
-
-export async function resetKioskPassword(input: { id: string }) {
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
-  if (!parsed.success) return fail('VALIDATION_ERROR', 'Input tidak valid');
-  const admX = await requireAdmin(); if (!admX.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + admX.debug);
-  const admin = admX.user;
-  const plain = randomKioskPassword();
-  const db = supabaseService();
-  const { data, error } = await db
-    .from('kiosks')
-    .update({ password_hash: await hashPassword(plain) })
-    .eq('id', parsed.data.id)
-    .select('id, username, kiosk_name')
-    .single();
-  if (error) return fail('INTERNAL_ERROR', error.message);
-  await db.from('audit_logs').insert({ actor: admin.email ?? admin.id, action: 'reset_kiosk_password', meta: { username: data.username } });
-  return ok({ ...data, password_plain_once: plain });
-}
-
-export async function resetAllKioskPasswords() {
-  const admX = await requireAdmin(); if (!admX.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + admX.debug);
-  const admin = admX.user;
-  const db = supabaseService();
-  const { data: list, error: listError } = await db.from('kiosks').select('id, username, kiosk_name').order('kiosk_name');
-  if (listError) return fail('INTERNAL_ERROR', listError.message);
-  if (!list || list.length === 0) return fail('NOT_FOUND', 'Belum ada bilik.');
-  const out: Array<{ kiosk_name: string; username: string; password: string }> = [];
-  for (const k of list) {
-    const plain = randomKioskPassword();
-    const { error } = await db.from('kiosks').update({ password_hash: await hashPassword(plain) }).eq('id', k.id);
+  let kioskId: string;
+  if (!master) {
+    const { data: created, error: createErr } = await db.from('kiosks').insert({
+      kiosk_name: 'Master Bilik', username: 'bilik-ipm',
+      token, password_hash, is_active: true,
+    }).select('id').single();
+    if (!created) return fail('INTERNAL_ERROR', createErr?.message ?? 'Gagal membuat kiosk');
+    kioskId = created.id;
+    await db.from('audit_logs').insert({ actor: admin.email ?? admin.id, action: 'kiosk_create_first', meta: { kiosk_id: kioskId } });
+  } else {
+    const { error } = await db.from('kiosks').update({ token, password_hash }).eq('id', master.id);
     if (error) return fail('INTERNAL_ERROR', error.message);
-    out.push({ kiosk_name: k.kiosk_name, username: k.username, password: plain });
+    kioskId = master.id;
   }
-  await db.from('audit_logs').insert({ actor: admin.email ?? admin.id, action: 'reset_all_kiosk_passwords', meta: { count: out.length } });
-  return ok({ cards: out });
+  // Invalidate all active sessions — device bilik harus login ulang dengan token baru
+  await db.from('kiosk_sessions').update({ is_active: false }).eq('kiosk_id', kioskId).eq('is_active', true);
+  await db.from('audit_logs').insert({ actor: admin.email ?? admin.id, action: 'kiosk_token_generated', meta: { kiosk_id: kioskId } });
+  return ok({ token, kioskName: master?.kiosk_name ?? 'Master Bilik' });
 }
 
-export async function toggleKiosk(input: { id: string; is_active: boolean }) {
-  const parsed = z.object({ id: z.string().uuid(), is_active: z.boolean() }).safeParse(input);
-  if (!parsed.success) return fail('VALIDATION_ERROR', 'Input tidak valid');
-  const admX = await requireAdmin(); if (!admX.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + admX.debug);
+export async function setKioskMaxSessions(input: { maxSessions: number }) {
+  const parsed = z.object({ maxSessions: z.number().int().min(1).max(100) }).safeParse(input);
+  if (!parsed.success) return fail('VALIDATION_ERROR', 'Max sessions 1–100');
+  const adm = await requireAdmin();
+  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
   const db = supabaseService();
-  const { error } = await db.from('kiosks').update({ is_active: parsed.data.is_active }).eq('id', parsed.data.id);
+  const { error } = await db.from('election_settings').update({ kiosk_max_sessions: parsed.data.maxSessions }).eq('id', 1);
   if (error) return fail('INTERNAL_ERROR', error.message);
-  return ok({ updated: true });
+  return ok({ maxSessions: parsed.data.maxSessions });
 }
 
-export async function deleteKiosk(input: { id: string }) {
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
+export async function forceLogoutSession(input: { sessionId: string }) {
+  const parsed = z.object({ sessionId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return fail('VALIDATION_ERROR', 'Input tidak valid');
-  const admX = await requireAdmin(); if (!admX.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + admX.debug);
+  const adm = await requireAdmin();
+  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
   const db = supabaseService();
-  const { count } = await db.from('votes').select('id', { count: 'exact', head: true }).eq('kiosk_id', parsed.data.id);
-  if ((count ?? 0) > 0) return fail('FORBIDDEN', 'Bilik sudah dipakai vote, tidak boleh dihapus. Nonaktifkan saja.');
-  const { error } = await db.from('kiosks').delete().eq('id', parsed.data.id);
+  const { error } = await db.from('kiosk_sessions').update({ is_active: false }).eq('id', parsed.data.sessionId);
   if (error) return fail('INTERNAL_ERROR', error.message);
-  return ok({ deleted: true });
+  return ok({ loggedOut: true });
+}
+
+export async function clearInactiveSessions() {
+  const adm = await requireAdmin();
+  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  const db = supabaseService();
+  const { count, error: countErr } = await db.from('kiosk_sessions').select('id', { count: 'exact', head: true }).eq('is_active', false);
+  if (countErr) return fail('INTERNAL_ERROR', countErr.message);
+  const { error: deleteErr } = await db.from('kiosk_sessions').delete().eq('is_active', false);
+  if (deleteErr) return fail('INTERNAL_ERROR', deleteErr.message);
+  return ok({ cleared: count ?? 0 });
+}
+
+export async function getKioskSessions() {
+  const adm = await requireAdmin();
+  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  const db = supabaseService();
+  const { data: master } = await db
+    .from('kiosks')
+    .select('id, kiosk_name, last_ping, token')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(1)
+    .single();
+  if (!master) return ok({ master: null, sessions: [], maxSessions: 10 });
+  const { data: settings } = await db.from('election_settings').select('kiosk_max_sessions').eq('id', 1).single();
+  const { data: sessions } = await db
+    .from('kiosk_sessions')
+    .select('id, device_name, user_agent, ip_address, logged_in_at, last_ping, is_active')
+    .eq('kiosk_id', master.id)
+    .order('last_ping', { ascending: false, nullsFirst: false });
+  return ok({ master, sessions: sessions ?? [], maxSessions: settings?.kiosk_max_sessions ?? 10 });
 }
 
 export async function setElectionStatus(input: { status: 'start' | 'pause' | 'stop' }) {
@@ -107,7 +122,6 @@ export async function setElectionStatus(input: { status: 'start' | 'pause' | 'st
     const { resultsSnapshotHash } = await import('@/lib/hash');
     patch.results_hash = resultsSnapshotHash(rows ?? []);
   } else if (parsed.data.status === 'start') {
-    // Buka lagi setelah stop: batalkan finalisasi biar hash lama tidak nyangkut.
     patch.stopped_at = null;
     patch.results_hash = null;
   }

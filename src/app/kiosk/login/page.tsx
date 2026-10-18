@@ -10,7 +10,6 @@ import { Button } from '@/components/Button';
 
 export default function KioskLoginPage() {
   const r = useRouter();
-  const [u, setU] = useState('');
   const [p, setP] = useState('');
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,13 +19,13 @@ export default function KioskLoginPage() {
     e.preventDefault();
     setLoading(true);
     setErr('');
-    const res = await loginKiosk({ username: u, password: p });
+    const res = await loginKiosk({ password: p });
     setLoading(false);
     if (!res.success) {
       setErr(res.error.message);
       return;
     }
-    r.push('/kiosk/vote');
+    r.push('/kiosk/ballot');
   }
 
   return (
@@ -46,23 +45,21 @@ export default function KioskLoginPage() {
         <p className="text-slate-600 text-sm">SMK Muhammadiyah Kandanghaur</p>
       </div>
       <form onSubmit={submit} className="mt-6 w-full max-w-sm rounded-2xl bg-white p-8 shadow-md border border-slate-200">
-        <label className="text-sm font-medium" htmlFor="u">
-          Username bilik
-        </label>
-        <input id="u" value={u} onChange={(e) => setU(e.target.value)} placeholder="bilik-lab-1" autoComplete="username" className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono" />
-        <label className="mt-4 block text-sm font-medium" htmlFor="p">
-          Password
+        <label className="text-sm font-medium" htmlFor="p">
+          Token Bilik
         </label>
         <div className="mt-1 flex gap-2">
-          <input id="p" type={show ? 'text' : 'password'} value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono" />
+          <input
+            id="p" type={show ? 'text' : 'password'} value={p}
+            onChange={(e) => setP(e.target.value)} autoComplete="current-password"
+            className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono"
+          />
           <Button
             type="button"
             variant="ghost"
             className="shrink-0 px-3 inline-flex items-center justify-center"
             onClick={() => setShow((v) => !v)}
             aria-label={show ? 'Sembunyikan password' : 'Tampilkan password'}
-            aria-pressed={show}
-            title={show ? 'Sembunyikan password' : 'Tampilkan password'}
           >
             {show ? (
               <EyeOff className="h-5 w-5" aria-hidden="true" />
@@ -80,7 +77,7 @@ export default function KioskLoginPage() {
           <LogIn className="h-5 w-5" aria-hidden="true" />
           Masuk ke Bilik
         </Button>
-        <p className="mt-3 text-xs text-slate-600">Hubungi admin command center jika lupa kredensial.</p>
+        <p className="mt-3 text-xs text-slate-600">Hubungi admin command center jika lupa password.</p>
       </form>
       <Link href="/" className="mt-4 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />

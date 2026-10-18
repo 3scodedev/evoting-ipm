@@ -9,7 +9,8 @@ export default function SuccessPage() {
 
   useEffect(() => {
     if (left <= 0) {
-      r.push('/kiosk/vote');
+      // Bilik tetap terbuka untuk pemilih berikutnya — tanpa input token ulang
+      r.push('/kiosk/ballot');
       return;
     }
     const t = setTimeout(() => setLeft((v) => v - 1), 1000);
@@ -26,7 +27,7 @@ export default function SuccessPage() {
       <div className="mt-6 w-full max-w-xs bg-slate-200 rounded-full h-2 overflow-hidden">
         <div className="h-full bg-sky-600 transition-all" style={{ width: `${(left / 3) * 100}%` }} />
       </div>
-      <p className="mt-2 text-sm text-slate-600">Menyiapkan bilik untuk pemilih berikutnya… {left}</p>
+      <p className="mt-2 text-sm text-slate-600">Menyiapkan bilik untuk pemilih berikutnya... {left}</p>
     </main>
   );
 }

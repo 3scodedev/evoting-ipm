@@ -9,21 +9,57 @@
   --radius-lg: 16px;
 }
 
+/* ---- Skeleton shimmer ----
+   Highlight di pseudo-element + transform translateX → dianimasikan GPU,
+   bebas repaint/layout, jadi sweep-nya mulus walau banyak blok sekaligus. */
 @keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
-  background-size: 800px 100%;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-color: #e2e8f0; /* slate-200 */
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
   animation: shimmer 1.5s linear infinite;
+  will-change: transform;
 }
-.dark .skeleton {
-  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
-  background-size: 800px 100%;
+.skeleton-dark { background-color: #1e293b; /* slate-800 */ }
+.skeleton-dark::after {
+  background-image: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.16), transparent);
 }
+
+/* ---- Transisi konten setelah skeleton ----
+   fill-mode `backwards` (bukan `both`): elemen tersembunyi selama delay,
+   tapi tidak menyisakan transform setelah selesai — supaya micro-interaction
+   (hover lift) dan positioning `fixed` di dalamnya tetap bekerja normal. */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+/* Anak-anak diberi `style={{ '--i': index }}` untuk fade berurutan halus. */
+.stagger-fade > * {
+  animation: fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  .skeleton::after { display: none; }
+  .skeleton { animation: skeleton-pulse 1.6s ease-in-out infinite !important; }
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 .kiosk-input {
@@ -35,30 +71,3 @@
 }
 .touch-kiosk { min-height: 48px; min-width: 48px; }
 
-@page { size: A4 portrait; margin: 10mm; }
-@media print {
-  body * { visibility: hidden; }
-  #print-area, #print-area * { visibility: visible; }
-  #print-area {
-    position: absolute;
-    inset: 0;
-    display: block !important;
-    background: #fff;
-  }
-  .print-card {
-    width: 80mm;
-    margin: 0 auto;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  .print-sheet { display: block !important; }
-  .print-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 4mm;
-  }
-  .print-cut {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-}

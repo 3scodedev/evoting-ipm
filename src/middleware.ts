@@ -11,10 +11,6 @@ export function middleware(req: NextRequest) {
     if (!kiosk && pathname !== '/kiosk/login') {
       return NextResponse.redirect(new URL('/kiosk/login', req.url));
     }
-    if (pathname.startsWith('/kiosk/ballot')) {
-      const verified = getCookie(req, 'voter-verified');
-      if (!verified) return NextResponse.redirect(new URL('/kiosk/vote', req.url));
-    }
   }
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     const hasSession = req.cookies.getAll().some((c) => c.name.endsWith('-auth-token'));

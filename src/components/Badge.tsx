@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-export function Badge({ tone = 'gray', pulse, children }: { tone?: 'emerald' | 'amber' | 'gray' | 'sky' | 'red' | 'green'; pulse?: boolean; children: React.ReactNode }) {
+export function Badge({ tone = 'gray', pulse, children, className }: { tone?: 'emerald' | 'amber' | 'gray' | 'sky' | 'red' | 'green'; pulse?: boolean; children: React.ReactNode; className?: string }) {
   const map: Record<string, string> = {
     emerald: 'bg-sky-100 text-sky-800',
     green: 'bg-sky-100 text-sky-800',
@@ -10,7 +10,7 @@ export function Badge({ tone = 'gray', pulse, children }: { tone?: 'emerald' | '
     red: 'bg-red-100 text-red-800',
   };
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium', map[tone])}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium', map[tone], className)}>
       {pulse && <span className="h-2 w-2 rounded-full bg-current animate-pulse" aria-hidden />}
       {children}
     </span>

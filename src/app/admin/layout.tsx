@@ -3,13 +3,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, MonitorSmartphone, Users, UserSquare2, FileText, LogOut } from 'lucide-react';
+import { LayoutDashboard, MonitorSmartphone, UserSquare2, FileText, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const MENU = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/kiosks', label: 'Bilik', icon: MonitorSmartphone },
-  { href: '/admin/voters', label: 'DPT Pemilih', icon: Users },
   { href: '/admin/candidates', label: 'Kandidat', icon: UserSquare2 },
   { href: '/admin/reports', label: 'Laporan', icon: FileText },
 ];
@@ -18,7 +17,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const path = usePathname();
   const router = useRouter();
 
-  if (path === '/admin/login') return <>{children}</>;
+  // Halaman bare tanpa sidebar: login & preview cetak token bilik
+  if (path === '/admin/login' || path === '/admin/kiosks/print') return <>{children}</>;
 
   async function logout() {
     try {
@@ -39,14 +39,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Image
             src="/images/logo-ipm.png"
             alt="Logo IPM"
-            width={40}
-            height={40}
+            width={165}
+            height={320}
             priority
-            className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1"
+            className="h-11 w-auto shrink-0"
           />
-          <div>
-            <p className="text-lg font-bold leading-tight">Command Center</p>
-            <p className="text-xs text-slate-400">IPM • SMK Muh Kandanghaur</p>
+          <div className="min-w-0">
+            <p
+              className="truncate text-base font-bold leading-tight tracking-tight"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Command Center
+            </p>
+            <p className="mt-1 truncate text-xs font-medium leading-none text-slate-400">
+              SMK Muh Kandanghaur
+            </p>
           </div>
         </div>
         <nav className="mt-6 flex flex-col gap-1" aria-label="Navigasi admin">
@@ -83,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             key={m.href}
             href={m.href}
             className={cn(
-              'flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium',
+              'flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors',
               path === m.href ? 'text-sky-400' : 'text-slate-400'
             )}
             aria-current={path === m.href ? 'page' : undefined}

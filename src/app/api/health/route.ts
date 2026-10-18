@@ -1,21 +1,24 @@
 import { NextResponse } from 'next/server';
+import { supabaseService } from '@/lib/supabase/server';
 
+/**
+ * Health check + keep-alive.
+ *
+ * Query dilakukan ke tabel asli (bukan cuma endpoint auth) supaya request
+ * dari cron harian / monitor eksternal benar-benar terhitung sebagai
+ * aktivitas project oleh Supabase — mencegah project free tier di-pause
+ * otomatis setelah 7 hari tanpa aktivitas.
+ */
 export async function GET() {
   const started = Date.now();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  let dbMs: number | null = null;
   let dbOk = false;
   try {
-    if (url) {
-      const res = await fetch(`${url}/auth/v1/health`, {
-        signal: AbortSignal.timeout(3000),
-        headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '' },
-      });
-      dbOk = res.ok;
-    }
+    const db = supabaseService();
+    const { error } = await db.from('election_settings').select('status').eq('id', 1).maybeSingle();
+    dbOk = !error;
   } catch {
     dbOk = false;
   }
-  dbMs = Date.now() - started;
+  const dbMs = Date.now() - started;
   return NextResponse.json({ success: true, data: { ok: true, db_reachable: dbOk, db_ms: dbMs }, error: null });
 }

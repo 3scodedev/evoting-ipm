@@ -11,21 +11,11 @@ async function main() {
   }
   const db = createClient(url, service, { auth: { persistSession: false } });
   if (args.includes('--reset-votes')) {
-    console.log('Reset votes: TRUNCATE votes + reset has_voted/vote_count (jalankan di dashboard SQL).');
-    console.log('TRUNCATE votes; UPDATE voters SET has_voted=false, voted_at=null; UPDATE candidates SET vote_count=0;');
+    console.log('Reset votes: TRUNCATE votes + reset vote_count (jalankan di dashboard SQL).');
+    console.log('TRUNCATE votes; UPDATE candidates SET vote_count=0;');
     return;
   }
-  console.log('Seed plan: 1 settings(pause) + 3 kiosks + 3 candidates + 50 voters demo.');
-  if (args.includes('--demo') || args.length === 0) {
-    const voters = Array.from({ length: 50 }, (_, i) => ({
-      voter_id_number: String(600001 + i).padStart(10, '0'),
-      name: `Siswa Demo ${i + 1}`,
-      voter_type: 'siswa',
-      department: `XII RPL ${(i % 3) + 1}`,
-    }));
-    const { error } = await db.from('voters').upsert(voters, { onConflict: 'voter_id_number', ignoreDuplicates: true });
-    console.log(error ? `demo error: ${error.message}` : `demo ok: ${voters.length} voters`);
-  }
+  console.log('Seed plan: 3 kiosks + 3 candidates.');
   if (args.includes('--references') || args.length === 0) {
     const booths = ['Bilik Lab 1', 'Bilik Lab 2', 'Bilik Aula'];
     for (let i = 0; i < booths.length; i++) {

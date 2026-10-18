@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import type { ButtonHTMLAttributes } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger' | 'success';
 type Size = 'sm' | 'md' | 'lg' | 'xl-kiosk';
 
 const variants: Record<Variant, string> = {
@@ -10,6 +10,7 @@ const variants: Record<Variant, string> = {
   accent: 'bg-amber-400 text-slate-900 hover:bg-amber-500',
   ghost: 'bg-transparent border border-slate-200 text-slate-700 hover:bg-slate-100',
   danger: 'bg-red-600 text-white hover:bg-red-700',
+  success: 'bg-green-700 text-white hover:bg-green-800',
 };
 
 const sizes: Record<Size, string> = {
