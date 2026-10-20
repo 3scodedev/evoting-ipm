@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * Blok skeleton shimmer. Ukuran & bentuk diatur lewat `className`
- * (`h-*`, `w-*`, `rounded-*`). `dark` untuk halaman admin (slate-950).
+ * (`h-*`, `w-*`, `rounded-*`).
  */
 export function Skeleton({ className, dark }: { className?: string; dark?: boolean }) {
   return <div aria-hidden className={cn('skeleton rounded-md', dark && 'skeleton-dark', className)} />;

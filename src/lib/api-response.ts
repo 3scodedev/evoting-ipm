@@ -5,6 +5,7 @@ export type ApiErrorCode =
   | 'INVALID_CREDENTIALS'
   | 'FORBIDDEN'
   | 'ELECTION_CLOSED'
+  | 'ELECTION_RUNNING'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
 

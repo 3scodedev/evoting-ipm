@@ -103,7 +103,7 @@ export function ScreenLock() {
         onClick={lock}
         aria-label={locked ? 'Layar terkunci' : 'Kunci layar penuh'}
         title={locked ? 'Layar terkunci' : 'Layar penuh & kunci layar'}
-        className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:border-amber-300/40 disabled:bg-amber-400/10 disabled:text-amber-200"
+        className="flex h-10 shrink-0 items-center gap-2 rounded-full border-2 border-ink bg-white px-4 text-sm font-bold text-ink shadow-[2px_2px_0_#131313] transition hover:bg-brand-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red disabled:cursor-default disabled:bg-brand-yellow disabled:shadow-none"
       >
         <LockIcon open={!locked} />
         {locked ? 'Terkunci' : 'Kunci'}
@@ -113,13 +113,13 @@ export function ScreenLock() {
         <button
           type="button"
           onClick={refullscreen}
-          className="fixed inset-0 z-[60] flex cursor-pointer flex-col items-center justify-center gap-3 bg-green-950/95 p-6 text-center select-none"
+          className="fixed inset-0 z-[60] flex cursor-pointer flex-col items-center justify-center gap-3 bg-ink/95 p-6 text-center select-none"
         >
-          <LockIcon open={false} className="h-14 w-14 text-amber-400" />
+          <LockIcon open={false} className="h-14 w-14 text-brand-yellow" />
           <span className="text-2xl font-bold text-white" style={{ fontFamily: 'var(--font-display)' }}>
             Layar Terkunci
           </span>
-          <span className="text-sm text-green-200">Ketuk layar untuk kembali ke layar penuh.</span>
+          <span className="text-sm text-brand-sky-light">Ketuk layar untuk kembali ke layar penuh.</span>
         </button>
       )}
     </>

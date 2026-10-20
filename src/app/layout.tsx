@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       {/* suppressHydrationWarning: atribut tambahan dari browser extension
           (mis. `__processed_<uuid>__` di <body>) tidak ikut di-SSR. */}
       <body
-        className="min-h-screen bg-slate-50 text-slate-900 antialiased"
+        className="min-h-screen text-ink antialiased"
         suppressHydrationWarning
       >
         {children}

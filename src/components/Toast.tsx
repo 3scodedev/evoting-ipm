@@ -29,26 +29,30 @@ export function useToasts() {
 export function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2" aria-live="polite">
+    <div className="fixed bottom-24 right-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2.5 md:bottom-5" aria-live="polite">
       {toasts.map((t) => (
         <div
           key={t.id}
           role={t.tone === 'error' ? 'alert' : 'status'}
           className={cn(
-            'flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg',
-            t.tone === 'success' ? 'border-emerald-500 bg-emerald-600 text-white' : 'border-red-500 bg-red-600 text-white'
+            'flex items-start gap-2.5 rounded-2xl border-2 border-ink bg-white px-4 py-3 text-sm font-semibold text-ink shadow-hard',
+            t.tone === 'error' && 'bg-[#fff3f1]'
           )}
         >
           {t.tone === 'success' ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-ink bg-brand-sky">
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
           ) : (
-            <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-ink bg-brand-red text-white">
+              <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
           )}
           <span className="flex-1">{t.text}</span>
           <button
             onClick={() => onDismiss(t.id)}
             aria-label="Tutup notifikasi"
-            className="rounded p-0.5 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+            className="rounded-full p-0.5 text-ink/50 transition hover:bg-brand-yellow hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

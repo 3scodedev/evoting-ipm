@@ -1,25 +1,33 @@
 'use server';
 
 import { z } from 'zod';
-import { cookies } from 'next/headers';
-import { supabaseService, supabaseServer } from '@/lib/supabase/server';
+import { timingSafeEqual } from 'crypto';
+import { supabaseService } from '@/lib/supabase/server';
+import { requireAdminUser } from '@/lib/auth-admin';
 import { hashPassword, randomKioskPassword } from '@/lib/auth-kiosk';
 import { ok, fail } from '@/lib/api-response';
 
+/** Password reset suara disimpan di env, bukan di client. */
+function verifyResetPassword(input: string) {
+  const expected = process.env.RESET_VOTES_PASSWORD;
+  if (!expected) return 'Password reset belum dikonfigurasi (RESET_VOTES_PASSWORD).';
+  const inputBuf = Buffer.from(input, 'utf8');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  if (inputBuf.length !== expectedBuf.length || !timingSafeEqual(inputBuf, expectedBuf)) {
+    return 'Password reset salah.';
+  }
+  return null;
+}
+
 async function requireAdmin() {
-  const sb = await supabaseServer();
-  const { data, error } = await sb.auth.getUser();
-  if (data.user) return { user: data.user, debug: '' };
-  const jar = await cookies();
-  const names = jar.getAll().map((c) => c.name);
-  const debug = `debug: ${names.length} cookies [${names.join(',') || 'kosong'}], getUserErr=${error?.message ?? 'none'}`;
-  return { user: null as never, debug };
+  const user = await requireAdminUser();
+  return { user };
 }
 
 /** Token bilik: 8 huruf kapital, tetap sama sampai admin klik Generate Token. */
 export async function generateKioskToken() {
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const admin = adm.user;
   const db = supabaseService();
   const token = randomKioskPassword(8);
@@ -57,7 +65,7 @@ export async function setKioskMaxSessions(input: { maxSessions: number }) {
   const parsed = z.object({ maxSessions: z.number().int().min(1).max(100) }).safeParse(input);
   if (!parsed.success) return fail('VALIDATION_ERROR', 'Max sessions 1–100');
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const db = supabaseService();
   const { error } = await db.from('election_settings').update({ kiosk_max_sessions: parsed.data.maxSessions }).eq('id', 1);
   if (error) return fail('INTERNAL_ERROR', error.message);
@@ -68,7 +76,7 @@ export async function forceLogoutSession(input: { sessionId: string }) {
   const parsed = z.object({ sessionId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return fail('VALIDATION_ERROR', 'Input tidak valid');
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const db = supabaseService();
   const { error } = await db.from('kiosk_sessions').update({ is_active: false }).eq('id', parsed.data.sessionId);
   if (error) return fail('INTERNAL_ERROR', error.message);
@@ -77,7 +85,7 @@ export async function forceLogoutSession(input: { sessionId: string }) {
 
 export async function clearInactiveSessions() {
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const db = supabaseService();
   const { count, error: countErr } = await db.from('kiosk_sessions').select('id', { count: 'exact', head: true }).eq('is_active', false);
   if (countErr) return fail('INTERNAL_ERROR', countErr.message);
@@ -88,7 +96,7 @@ export async function clearInactiveSessions() {
 
 export async function getKioskSessions() {
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const db = supabaseService();
   const { data: master } = await db
     .from('kiosks')
@@ -108,11 +116,34 @@ export async function getKioskSessions() {
   return ok({ master, sessions: sessions ?? [], maxSessions: settings?.kiosk_max_sessions ?? 10 });
 }
 
+export async function resetVotes(input: { password: string }) {
+  const parsed = z.object({ password: z.string().min(1) }).safeParse(input);
+  if (!parsed.success) return fail('VALIDATION_ERROR', 'Masukkan password reset.');
+  const adm = await requireAdmin();
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
+  const passwordError = verifyResetPassword(parsed.data.password);
+  if (passwordError) return fail('INVALID_CREDENTIALS', passwordError);
+  const admin = adm.user;
+  const db = supabaseService();
+  const { data, error } = await db.rpc('reset_votes', {
+    p_actor: admin.email ?? admin.id,
+  });
+  if (error) return fail('INTERNAL_ERROR', error.message);
+  const result = data as { success?: boolean; code?: string; deleted?: number } | null;
+  if (!result?.success) {
+    if (result?.code === 'ELECTION_RUNNING') {
+      return fail('ELECTION_RUNNING', 'Stop atau jeda pemilihan dulu sebelum reset suara.');
+    }
+    return fail('INTERNAL_ERROR', 'Gagal reset suara.');
+  }
+  return ok({ deleted: result.deleted ?? 0 });
+}
+
 export async function setElectionStatus(input: { status: 'start' | 'pause' | 'stop' }) {
   const parsed = z.object({ status: z.enum(['start', 'pause', 'stop']) }).safeParse(input);
   if (!parsed.success) return fail('VALIDATION_ERROR', 'Status tidak valid');
   const adm = await requireAdmin();
-  if (!adm.user) return fail('UNAUTHORIZED', 'Login admin dulu. ' + adm.debug);
+  if (!adm.user) return fail('UNAUTHORIZED', 'Akses admin diperlukan.');
   const admin = adm.user;
   const db = supabaseService();
   const patch: Record<string, unknown> = { status: parsed.data.status };

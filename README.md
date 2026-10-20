@@ -46,8 +46,11 @@ bun install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role key` (klik Reveal, **rahasia, hanya di server**) → `SUPABASE_SERVICE_ROLE_KEY`
    - `Database → Connection string (URI)` → `DATABASE_URL`
-3. Buka **Authentication → Users → Add user** untuk akun admin, contoh:
-   - Email: `admin@smk.sch.id`, password bebas (min 8 karakter), centang **Auto Confirm User**.
+3. Buka **Authentication → Users → Add user** dan buat dua akun:
+   - **Admin** (akses penuh) — isi **App Meta Data** dengan `{"role":"admin"}`.
+   - **Panitia** (hanya melihat total suara + perolehan) — isi **App Meta Data** dengan `{"role":"panitia"}`.
+   Centang **Auto Confirm User** untuk keduanya. Role disimpan di `app_metadata`
+   (bukan `user_metadata`) supaya tidak bisa diubah dari browser.
 
 ### 3. Isi environment
 
@@ -68,10 +71,10 @@ DATABASE_URL=postgresql://postgres:xxxxx@db.xyz.supabase.co:5432/postgres
 
 ### 4. Jalankan migration database
 
-Migration ada di `supabase/migrations/` (`001_enums` → `006_storage`). Pilih salah satu:
+Migration ada di `supabase/migrations/` (jalankan berurutan dari `001_enums` sampai file terbaru). Pilih salah satu:
 
 **Opsi A — via Supabase Dashboard (paling mudah, tanpa CLI):**
-Buka **SQL Editor → New query**, jalankan isi file **berurutan**: `001_enums.sql`, `002_tables.sql`, `003_indexes.sql`, `004_rls.sql`, `005_rpc.sql`, `006_storage.sql`.
+Buka **SQL Editor → New query**, jalankan isi file **berurutan**: `001_enums.sql`, `002_tables.sql`, `003_indexes.sql`, `004_rls.sql`, `005_rpc.sql`, `006_storage.sql`, lalu migration lanjutan sampai `013_reset_votes.sql`.
 
 **Opsi B — via Supabase CLI:**
 
@@ -151,13 +154,16 @@ Buka http://localhost:3000, cek health: http://localhost:3000/api/health → `{"
    - `SUPABASE_SERVICE_ROLE_KEY` (wajib secret, jangan prefix `NEXT_PUBLIC_`)
    - `DATABASE_URL` (untuk seed/migrate bila perlu)
    - `KIOSK_SESSION_SECRET` (isi random 32+ char baru, beda dari local)
+   - `RESET_VOTES_PASSWORD` (password konfirmasi tombol **Reset Suara** di dashboard, mis. `140513`)
    - `NEXT_PUBLIC_APP_URL` = URL Vercel kamu, mis. `https://e-voting-ipm.vercel.app`
    - Sisanya samakan dengan `.env.example` (`STORAGE_BUCKET`, `SIGNED_URL_TTL`, `MAX_UPLOAD_MB`, dsb.)
 4. Klik **Deploy**, tunggu hingga live.
 5. **Pasca-deploy (wajib sekali):**
-   - Pastikan migration `001–006` sudah dijalankan di **Supabase project production** (jangan pakai DB local).
+   - Pastikan semua migration di `supabase/migrations/` sudah dijalankan di **Supabase project production** (jangan pakai DB local).
    - Pastikan bucket `candidates` (Private) + Realtime 4 tabel aktif (langkah local no. 4).
-   - Buat akun admin production via **Supabase Dashboard → Authentication**.
+   - Buat akun production via **Supabase Dashboard → Authentication** dengan role di
+     **App Meta Data**: `{"role":"admin"}` untuk admin penuh, `{"role":"panitia"}`
+     untuk akses pantauan (total suara + perolehan saja).
    - Buka `https://<app>.vercel.app/api/health` → harus `{"success":true}`.
    - Smoke test: Start → vote 1x dari HP/laptop → dashboard naik → Stop → cetak Berita Acara.
 6. (Opsional) Custom domain sekolah, mis. `pilketos.smk.sch.id`: **Vercel → Settings → Domains → Add** → tambahkan CNAME di DNS ke `cname.vercel-dns.com` → update `NEXT_PUBLIC_APP_URL` + redeploy.

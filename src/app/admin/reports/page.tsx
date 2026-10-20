@@ -6,6 +6,7 @@ import { generateBeritaAcaraPdf } from '@/lib/pdf/berita-acara';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { ToastStack, useToasts } from '@/components/Toast';
+import { PageHeader, Panel } from '@/components/admin/Panel';
 import { ReportsSkeleton } from '@/components/skeletons/ReportsSkeleton';
 import { cn } from '@/lib/utils';
 import { BarChart3, Download, FileDown, FileText, Printer, Trophy } from 'lucide-react';
@@ -109,179 +110,161 @@ export default function ReportsPage() {
   const hasVotes = total > 0;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 p-4 pb-24 md:pb-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-sky-600/20 flex items-center justify-center">
-            <FileText className="h-5 w-5 text-sky-400" aria-hidden />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-none">Laporan &amp; Berita Acara</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Rekap hasil, cetak berita acara &amp; export data</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge tone={live ? 'emerald' : 'amber'} pulse={live}>
-            {live ? 'LIVE' : 'CONNECTING'}
+    <main className="app-page animate-fade-in">
+      <PageHeader
+        icon={FileText}
+        kicker="Command Center"
+        title="Laporan & Berita Acara"
+        description="Rekap hasil, cetak dokumen final, dan export data pemilihan."
+        tone="yellow"
+      >
+        <Badge tone={live ? 'emerald' : 'amber'} pulse={live}>
+          {live ? 'Realtime' : 'Menghubungkan'}
+        </Badge>
+        {election && (
+          <Badge tone={STATUS_META[election].tone} pulse={election === 'start'}>
+            {STATUS_META[election].label}
           </Badge>
-          {election && (
-            <Badge tone={STATUS_META[election].tone} pulse={election === 'start'}>
-              {STATUS_META[election].label}
-            </Badge>
-          )}
-          <span className="text-xs text-slate-400 font-mono" aria-live="polite">
-            {total} suara
-          </span>
-        </div>
-      </div>
+        )}
+        <span className="app-chip font-mono text-[10px]" aria-live="polite">
+          {total} suara
+        </span>
+      </PageHeader>
 
-      <div className="animate-fade-in">
-        {/* Rekap suara */}
-        <section className="mt-6 rounded-xl bg-slate-800 border border-slate-700/60 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-7 w-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-              <Trophy className="h-4 w-4 text-amber-400" aria-hidden />
-            </div>
-            <h2 className="font-bold text-base">Rekap Suara</h2>
-            {updatedAt && (
-              <span className="ml-auto text-[11px] text-slate-500 font-mono">
-                diperbarui {updatedAt.toLocaleTimeString('id-ID')}
-              </span>
-            )}
+      <Panel
+        icon={Trophy}
+        title="Rekap Suara"
+        tone="yellow"
+        className="mt-4"
+        aside={
+          updatedAt && (
+            <span className="app-chip font-mono text-[10px] text-ink/55">
+              {updatedAt.toLocaleTimeString('id-ID')}
+            </span>
+          )
+        }
+      >
+        {!hasVotes ? (
+          <div className="app-empty">
+            <BarChart3 className="mx-auto mb-2 h-8 w-8 text-ink/25" aria-hidden />
+            <p className="font-semibold">Belum ada suara masuk.</p>
+            <p className="mt-1 text-xs">Rekap, berita acara &amp; export aktif setelah minimal 1 suara masuk.</p>
           </div>
-
-          {!hasVotes ? (
-            <div className="mt-2 text-sm text-slate-400 text-center py-8 border border-dashed border-slate-700 rounded-lg">
-              <BarChart3 className="h-8 w-8 mx-auto mb-2 text-slate-600" aria-hidden />
-              <p>Belum ada suara masuk.</p>
-              <p className="text-xs text-slate-500 mt-1">Rekap, berita acara &amp; export aktif setelah minimal 1 suara masuk.</p>
-            </div>
-          ) : (
-            <>
-              <ol className="space-y-2 stagger-fade">
-                {ranked.map((c, i) => {
-                  const pct = total ? (c.vote_count / total) * 100 : 0;
-                  const isWinner = i === 0;
-                  return (
-                    <li
-                      key={c.candidate_number}
-                      style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
-                      className={cn(
-                        'rounded-lg border bg-slate-900/60 p-3',
-                        isWinner ? 'border-amber-400/50' : 'border-slate-700/40'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={cn(
-                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
-                            isWinner ? 'bg-amber-400 text-slate-900' : 'bg-slate-700 text-slate-200'
-                          )}
-                          aria-label={isWinner ? 'Peringkat 1' : `Peringkat ${i + 1}`}
-                        >
-                          {isWinner ? <Trophy className="h-4 w-4" aria-hidden /> : i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="line-clamp-2 font-bold">
-                              No.{c.candidate_number} {c.name}
-                              {c.class_name && (
-                                <span className="ml-1.5 text-xs font-medium text-slate-400">Kelas {c.class_name}</span>
-                              )}
-                            </span>
-                            <span className="shrink-0 font-mono text-sm">
-                              {c.vote_count}
-                              <span className="text-slate-400"> ({pct.toFixed(1)}%)</span>
-                            </span>
-                          </div>
-                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-700/60" aria-hidden>
-                            <div
-                              className={cn('h-full rounded-full transition-all', isWinner ? 'bg-amber-400' : 'bg-sky-500')}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
+        ) : (
+          <>
+            <ol className="stagger-fade space-y-2.5">
+              {ranked.map((c, i) => {
+                const pct = total ? (c.vote_count / total) * 100 : 0;
+                const isWinner = i === 0;
+                return (
+                  <li
+                    key={c.candidate_number}
+                    style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
+                    className={cn(
+                      'rounded-2xl border-2 border-ink p-3 shadow-hard-sm',
+                      isWinner ? 'bg-brand-yellow/25' : 'bg-white'
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          'grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink font-mono text-sm font-extrabold shadow-[2px_2px_0_#131313]',
+                          isWinner ? 'bg-brand-yellow' : 'bg-white text-ink/50'
+                        )}
+                        aria-label={isWinner ? 'Peringkat 1' : `Peringkat ${i + 1}`}
+                      >
+                        {isWinner ? <Trophy className="h-4 w-4" aria-hidden /> : i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <span className="line-clamp-2 font-bold">
+                            No.{c.candidate_number} {c.name}
+                            {c.class_name && (
+                              <span className="ml-1.5 text-xs font-bold text-brand-sky-deep">Kelas {c.class_name}</span>
+                            )}
+                          </span>
+                          <span className="shrink-0 font-mono text-sm font-bold">
+                            {c.vote_count}
+                            <span className="font-medium text-ink/45"> ({pct.toFixed(1)}%)</span>
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full border border-ink bg-white" aria-hidden>
+                          <div
+                            className={cn('h-full rounded-full transition-all', isWinner ? 'bg-brand-yellow' : 'bg-brand-sky')}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
-                    </li>
-                  );
-                })}
-              </ol>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-700/60 pt-3 text-sm">
-                <span className="text-slate-400">Total suara masuk</span>
-                <span className="font-mono font-bold">{total}</span>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Dokumen & export */}
-        <section className="mt-4 rounded-xl bg-slate-800 border border-slate-700/60 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-7 w-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
-              <FileDown className="h-4 w-4 text-sky-400" aria-hidden />
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="mt-3.5 flex items-center justify-between border-t-2 border-dashed border-ink/15 pt-3.5 text-sm">
+              <span className="font-semibold text-ink/55">Total suara masuk</span>
+              <span className="font-mono text-lg font-bold">{total}</span>
             </div>
-            <h2 className="font-bold text-base">Dokumen &amp; Export</h2>
-          </div>
+          </>
+        )}
+      </Panel>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Berita acara */}
-            <div className="flex flex-col rounded-lg bg-slate-900/80 p-3 border border-slate-700/40">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Printer className="h-3 w-3" aria-hidden /> Berita Acara
-              </p>
-              <p className="text-sm text-slate-400 flex-1">
-                Dokumen PDF hasil final + hash verifikasi. Aktif setelah pemilihan <b className="text-slate-300">di-stop</b> dari Dashboard.
-              </p>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <Badge tone={stopped && hasVotes ? 'emerald' : 'gray'} className="text-xs">
-                  {stopped && hasVotes ? 'Siap cetak' : 'Menunggu stop'}
-                </Badge>
-                <Button
-                  size="sm"
-                  disabled={!stopped || !hasVotes || busy}
-                  loading={busy}
-                  onClick={handlePrint}
-                  title={
-                    !stopped
-                      ? 'Stop pemilihan dulu di Dashboard'
-                      : !hasVotes
-                        ? 'Belum ada suara masuk'
-                        : 'Unduh berita acara (PDF)'
-                  }
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <Printer className="h-4 w-4" aria-hidden /> Cetak PDF
-                </Button>
-              </div>
-            </div>
-
-            {/* Export CSV */}
-            <div className="flex flex-col rounded-lg bg-slate-900/80 p-3 border border-slate-700/40">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Download className="h-3 w-3" aria-hidden /> Export Hasil (CSV)
-              </p>
-              <p className="text-sm text-slate-400 flex-1">
-                Rekap suara per kandidat dalam format CSV — bisa dibuka di Excel / Google Sheets.
-              </p>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <Badge tone="sky" className="text-xs">
-                  {rows.length} kandidat
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleExport}
-                  title="Unduh hasil.csv"
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <Download className="h-4 w-4" aria-hidden /> Download CSV
-                </Button>
-              </div>
+      <Panel icon={FileDown} title="Dokumen & Export" className="mt-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col rounded-2xl border-2 border-ink bg-brand-sky-light/35 p-4">
+            <p className="app-kicker mb-2 flex items-center gap-1.5">
+              <Printer className="h-3 w-3" aria-hidden /> Berita Acara
+            </p>
+            <p className="flex-1 text-sm font-medium leading-relaxed text-ink/60">
+              Dokumen PDF hasil final + hash verifikasi dalam <b className="text-ink">1 halaman A4</b>. Aktif setelah pemilihan{' '}
+              <b className="text-ink">di-stop</b> dari Dashboard.
+            </p>
+            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+              <Badge tone={stopped && hasVotes ? 'emerald' : 'gray'} className="text-[10px]">
+                {stopped && hasVotes ? 'Siap cetak' : 'Menunggu stop'}
+              </Badge>
+              <Button
+                size="sm"
+                disabled={!stopped || !hasVotes || busy}
+                loading={busy}
+                onClick={handlePrint}
+                title={
+                  !stopped
+                    ? 'Stop pemilihan dulu di Dashboard'
+                    : !hasVotes
+                      ? 'Belum ada suara masuk'
+                      : 'Unduh berita acara (PDF)'
+                }
+                className="inline-flex items-center gap-1.5"
+              >
+                <Printer className="h-4 w-4" aria-hidden /> Cetak PDF
+              </Button>
             </div>
           </div>
-        </section>
-      </div>
+
+          <div className="flex flex-col rounded-2xl border-2 border-ink bg-brand-yellow/20 p-4">
+            <p className="app-kicker mb-2 flex items-center gap-1.5">
+              <Download className="h-3 w-3" aria-hidden /> Export Hasil (CSV)
+            </p>
+            <p className="flex-1 text-sm font-medium leading-relaxed text-ink/60">
+              Rekap suara per kandidat dalam format CSV — bisa dibuka di Excel / Google Sheets.
+            </p>
+            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+              <Badge tone="amber" className="text-[10px]">
+                {rows.length} kandidat
+              </Badge>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleExport}
+                title="Unduh hasil.csv"
+                className="inline-flex items-center gap-1.5"
+              >
+                <Download className="h-4 w-4" aria-hidden /> Download CSV
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Panel>
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </main>

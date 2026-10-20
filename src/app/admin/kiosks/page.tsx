@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { ToastStack, useToasts } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { PageHeader, Panel } from '@/components/admin/Panel';
 import { KiosksSkeleton } from '@/components/skeletons/KiosksSkeleton';
 import {
   generateKioskToken,
@@ -51,15 +52,20 @@ function CopyField({ value }: { value: string }) {
     setTimeout(() => setCopied(false), 2000);
   }
   return (
-    <div className="flex items-center gap-1">
-      <code className="font-mono text-sm text-slate-200">{value}</code>
+    <div className="flex items-center gap-2">
+      <code className="min-w-0 flex-1 truncate font-mono text-xl font-bold tracking-[0.22em] text-ink">
+        {value}
+      </code>
       <button
         onClick={handleCopy}
-        className="ml-1 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition"
-        aria-label="Salin"
-        title="Salin"
+        className={cn(
+          'grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink bg-white text-ink shadow-[2px_2px_0_#131313] transition hover:bg-brand-yellow active:translate-x-[1px] active:translate-y-[1px] active:shadow-none',
+          copied && 'bg-brand-sky'
+        )}
+        aria-label="Salin token"
+        title="Salin token"
       >
-        {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </button>
     </div>
   );
@@ -107,9 +113,20 @@ export default function KiosksPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosks' }, () => load())
       .subscribe((s) => setLive(s === 'SUBSCRIBED'));
     const tick = setInterval(() => setNow(Date.now()), 5_000);
+    // Fallback kalau WebSocket putus / publication realtime belum aktif:
+    // session tetap ter-update tanpa harus reload halaman.
+    const poll = setInterval(load, 10_000);
+    const refreshOnVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', refreshOnVisible);
+    window.addEventListener('focus', refreshOnVisible);
     return () => {
       sb.removeChannel(ch);
       clearInterval(tick);
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', refreshOnVisible);
+      window.removeEventListener('focus', refreshOnVisible);
     };
   }, [load]);
 
@@ -165,233 +182,202 @@ export default function KiosksPage() {
   const liveCount = sessions.filter((s) => s.is_active && isKioskLive(s.last_ping, now)).length;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 p-4 pb-24 md:pb-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-sky-600/20 flex items-center justify-center">
-            <MonitorSmartphone className="h-5 w-5 text-sky-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-none">Manajemen Bilik</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Kelola kredensial & session bilik suara</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge tone={live ? 'emerald' : 'amber'} pulse={live}>{live ? 'LIVE' : 'CONNECTING'}</Badge>
-          {master && (
-            <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-              {master.kiosk_name}
-            </span>
-          )}
-          <span className="text-xs text-slate-400 font-mono" aria-live="polite">
-            {activeCount} aktif ({liveCount} live)
-            {maxSessions !== null && ` / ${maxSessions}`}
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handleClearInactive}
-            disabled={busy}
-            aria-label="Bersihkan sesi inactive"
-          >
-            Bersihkan Inactive
-          </Button>
-        </div>
-      </div>
+    <main className="app-page animate-fade-in">
+      <PageHeader
+        icon={MonitorSmartphone}
+        kicker="Command Center"
+        title="Manajemen Bilik"
+        description="Kelola kredensial, batas device, dan sesi bilik suara dari satu tempat."
+      >
+        <Badge tone={live ? 'emerald' : 'amber'} pulse={live}>
+          {live ? 'Realtime' : 'Menghubungkan'}
+        </Badge>
+        <span className="app-chip font-mono text-[10px]" aria-live="polite">
+          {activeCount} sesi ({liveCount} live){maxSessions !== null && ` / ${maxSessions}`}
+        </span>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={handleClearInactive}
+          disabled={busy}
+          aria-label="Bersihkan sesi inactive"
+        >
+          Bersihkan Inactive
+        </Button>
+      </PageHeader>
 
-      <div className="animate-fade-in">
-          {/* Master Credential Section */}
-          <section className="mt-6 rounded-xl bg-slate-800 border border-slate-700/60 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-7 w-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-                <Key className="h-4 w-4 text-amber-400" />
+      <Panel
+        icon={Key}
+        title="Kredensial Master Bilik"
+        tone="yellow"
+        className="mt-4"
+        aside={master && <span className="app-chip font-mono text-[10px]">{master.kiosk_name}</span>}
+      >
+        {!master ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm font-medium text-ink/55">
+              Belum ada master bilik. Generate token untuk membuatnya.
+            </p>
+            <Button size="sm" onClick={() => setPendingGenerate(true)} disabled={busy}>
+              Generate Token
+            </Button>
+          </div>
+        ) : (
+          <div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border-2 border-ink bg-brand-sky-light/45 p-4">
+                <p className="app-kicker mb-2 flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" aria-hidden /> Token Bilik
+                </p>
+                {master.token ? (
+                  <CopyField value={master.token} />
+                ) : (
+                  <p className="text-sm font-medium text-ink/50">
+                    Belum ada token. Klik Generate Token untuk membuatnya.
+                  </p>
+                )}
               </div>
-              <h2 className="font-bold text-base">Kredensial Master Bilik</h2>
+              <div className="rounded-2xl border-2 border-ink bg-white p-4">
+                <p className="app-kicker mb-2 flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" aria-hidden /> Last Ping
+                </p>
+                <p className="font-mono text-xl font-bold text-ink">
+                  {master.last_ping ? timeAgo(master.last_ping, now) : '—'}
+                </p>
+              </div>
             </div>
-            {!master ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="text-sm text-slate-400">Belum ada master bilik. Generate token untuk membuatnya.</p>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t-2 border-dashed border-ink/15 pt-4">
+              <p className="max-w-md text-xs font-semibold leading-relaxed text-ink/45">
+                Token 8 huruf kapital dipakai semua device bilik untuk login &amp; validasi.
+                Tetap sama sampai kamu generate ulang.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
+                  variant="secondary"
+                  onClick={() => window.open('/admin/kiosks/print', '_blank', 'noopener')}
+                  disabled={busy || !master.token}
+                  title={master.token ? 'Cetak kartu token untuk ditempel di bilik' : 'Belum ada token'}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Printer className="h-4 w-4" /> Print Token
+                </Button>
+                <Button
+                  size="sm"
+                  variant="accent"
                   onClick={() => setPendingGenerate(true)}
                   disabled={busy}
+                  className="inline-flex items-center gap-1.5"
                 >
-                  Generate Token
+                  <Key className="h-4 w-4" /> Generate Token
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-slate-900/80 p-3 border border-slate-700/40">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                      <Shield className="h-3 w-3" /> Token Bilik
-                    </p>
-                    {master.token ? (
-                      <CopyField value={master.token} />
-                    ) : (
-                      <p className="text-sm text-slate-500">
-                        Belum ada token. Klik Generate Token untuk membuatnya.
-                      </p>
-                    )}
-                  </div>
-                  <div className="rounded-lg bg-slate-900/80 p-3 border border-slate-700/40">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                      <Clock className="h-3 w-3" /> Last Ping
-                    </p>
-                    <p className="font-mono text-sm text-slate-300">
-                      {master.last_ping ? timeAgo(master.last_ping, now) : '—'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/60">
-                  <p className="text-xs text-slate-500 max-w-md">
-                    Token 8 huruf kapital dipakai semua device bilik untuk login &amp; validasi.
-                    Tetap sama sampai kamu generate ulang.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => window.open('/admin/kiosks/print', '_blank', 'noopener')}
-                      disabled={busy || !master.token}
-                      title={master.token ? 'Cetak kartu token untuk ditempel di bilik' : 'Belum ada token'}
-                      className="inline-flex items-center gap-1.5"
-                    >
-                      <Printer className="h-4 w-4" /> Print Token
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setPendingGenerate(true)}
-                      disabled={busy}
-                      className="inline-flex items-center gap-1.5"
-                    >
-                      <Key className="h-4 w-4" /> Generate Token
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Max Sessions Section */}
-          <section className="mt-4 rounded-xl bg-slate-800 border border-slate-700/60 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-7 w-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
-                <Users className="h-4 w-4 text-sky-400" />
-              </div>
-              <h2 className="font-bold text-base">Pengaturan Session</h2>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm text-slate-300" htmlFor="max-sessions">
-                Jumlah device maksimum login bersamaan
-              </label>
-              <input
-                id="max-sessions"
-                type="number"
-                min={1}
-                max={100}
-                value={maxInput}
-                onChange={(e) => setMaxInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveMax(); }}
-                className="w-20 rounded-md border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm font-mono text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-              <Button
-                size="sm"
-                onClick={handleSaveMax}
-                loading={savingMax}
-                disabled={maxInput === '' || maxSessions === null || parseInt(maxInput, 10) === maxSessions}
-                className="inline-flex items-center gap-1.5"
-              >
-                Simpan
-              </Button>
-            </div>
-          </section>
+          </div>
+        )}
+      </Panel>
 
-          {/* Active Sessions Section */}
-          <section className="mt-4 rounded-xl bg-slate-800 border border-slate-700/60 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-7 w-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                <MonitorSmartphone className="h-4 w-4 text-emerald-400" />
-              </div>
-              <h2 className="font-bold text-base">Session Aktif</h2>
-              {sessions.length > 0 && (
-                <Badge tone="sky" className="ml-auto text-xs">{sessions.length} total</Badge>
-              )}
-            </div>
-            {sessions.length === 0 ? (
-              <div className="mt-2 text-sm text-slate-400 text-center py-8 border border-dashed border-slate-700 rounded-lg">
-                <MonitorSmartphone className="h-8 w-8 mx-auto mb-2 text-slate-600" />
-                <p>Belum ada session aktif.</p>
-                <p className="text-xs text-slate-500 mt-1">Session muncul saat bilik login.</p>
-              </div>
-            ) : (
-              <div className="mt-3 overflow-x-auto rounded-lg border border-slate-700/50">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700 text-left text-slate-400 bg-slate-900/50">
-                      <th className="pb-2.5 pt-2 pr-4 pl-4 font-medium">Device</th>
-                      <th className="pb-2.5 pt-2 pr-4 font-medium">IP</th>
-                      <th className="pb-2.5 pt-2 pr-4 font-medium hidden md:table-cell">User Agent</th>
-                      <th className="pb-2.5 pt-2 pr-4 font-medium">Login</th>
-                      <th className="pb-2.5 pt-2 pr-4 font-medium">Last Ping</th>
-                      <th className="pb-2.5 pt-2 pr-4 font-medium">Status</th>
-                      <th className="pb-2.5 pt-2 pr-2 font-medium"></th>
+      <Panel icon={Users} title="Pengaturan Session" className="mt-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-sm font-semibold text-ink/65" htmlFor="max-sessions">
+            Jumlah device maksimum login bersamaan
+          </label>
+          <input
+            id="max-sessions"
+            type="number"
+            min={1}
+            max={100}
+            value={maxInput}
+            onChange={(e) => setMaxInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveMax(); }}
+            className="app-input w-24 text-center font-mono font-bold"
+          />
+          <Button
+            size="sm"
+            onClick={handleSaveMax}
+            loading={savingMax}
+            disabled={maxInput === '' || maxSessions === null || parseInt(maxInput, 10) === maxSessions}
+            className="inline-flex items-center gap-1.5"
+          >
+            Simpan
+          </Button>
+        </div>
+      </Panel>
+
+      <Panel
+        icon={MonitorSmartphone}
+        title="Session Aktif"
+        tone="yellow"
+        className="mt-4"
+        bodyClassName="p-3 sm:p-4"
+        aside={sessions.length > 0 && <Badge tone="sky">{sessions.length} total</Badge>}
+      >
+        {sessions.length === 0 ? (
+          <div className="app-empty">
+            <MonitorSmartphone className="mx-auto mb-2 h-8 w-8 text-ink/25" aria-hidden />
+            <p className="font-semibold">Belum ada session aktif.</p>
+            <p className="mt-1 text-xs">Session muncul saat bilik login.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border-2 border-ink">
+            <table className="app-table">
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>IP</th>
+                  <th className="hidden md:table-cell">User Agent</th>
+                  <th>Login</th>
+                  <th>Last Ping</th>
+                  <th>Status</th>
+                  <th><span className="sr-only">Aksi</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((s) => {
+                  const isLive = s.is_active && isKioskLive(s.last_ping, now);
+                  return (
+                    <tr key={s.id}>
+                      <td className="font-mono font-bold text-ink">
+                        {s.device_name ?? '—'}
+                      </td>
+                      <td className="font-mono text-xs text-ink/55">
+                        {s.ip_address ?? '—'}
+                      </td>
+                      <td className="hidden max-w-[220px] truncate text-xs text-ink/55 md:table-cell" title={s.user_agent ?? ''}>
+                        {s.user_agent ?? '—'}
+                      </td>
+                      <td className="text-xs font-medium text-ink/65">
+                        {new Date(s.logged_in_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                      </td>
+                      <td className="text-xs font-medium text-ink/65">
+                        {s.last_ping ? timeAgo(s.last_ping, now) : '—'}
+                      </td>
+                      <td>
+                        <Badge tone={isLive ? 'emerald' : 'gray'} pulse={isLive}>
+                          {isLive ? 'Live' : 'Offline'}
+                        </Badge>
+                      </td>
+                      <td className="text-right">
+                        {s.is_active && (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => handleForceLogout(s.id)}
+                            className="inline-flex h-7 items-center gap-1 px-2.5 text-[11px]"
+                          >
+                            Keluarkan
+                          </Button>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.map((s, idx) => {
-                      const isLive = s.is_active && isKioskLive(s.last_ping, now);
-                      return (
-                        <tr
-                          key={s.id}
-                          className={cn(
-                            "border-b border-slate-700/30 hover:bg-slate-700/20 transition",
-                            idx !== sessions.length - 1 && "border-b border-slate-700/50"
-                          )}
-                        >
-                          <td className="py-2.5 pr-4 pl-4 font-mono text-slate-200 font-medium">
-                            {s.device_name ?? '—'}
-                          </td>
-                          <td className="py-2.5 pr-4 font-mono text-slate-400 text-xs">
-                            {s.ip_address ?? '—'}
-                          </td>
-                          <td className="py-2.5 pr-4 text-slate-400 hidden md:table-cell max-w-[220px] truncate" title={s.user_agent ?? ''}>
-                            {s.user_agent ?? '—'}
-                          </td>
-                          <td className="py-2.5 pr-4 text-slate-300 text-xs">
-                            {new Date(s.logged_in_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
-                          </td>
-                          <td className="py-2.5 pr-4 text-slate-300 text-xs">
-                            {s.last_ping ? timeAgo(s.last_ping, now) : '—'}
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <Badge tone={isLive ? 'emerald' : s.is_active ? 'amber' : 'gray'} pulse={isLive}>
-                              {isLive ? 'Live' : s.is_active ? 'Aktif' : 'Offline'}
-                            </Badge>
-                          </td>
-                          <td className="py-2.5 pr-2 pl-4">
-                            {s.is_active && (
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={() => handleForceLogout(s.id)}
-                                className="inline-flex items-center gap-1 px-2 text-xs h-7"
-                              >
-                                Keluarkan
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-      </div>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
 
       <ConfirmDialog
         open={!!pendingLogout}

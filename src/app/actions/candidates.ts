@@ -2,8 +2,8 @@
 
 import { z } from 'zod';
 import sharp from 'sharp';
-import DOMPurify from 'isomorphic-dompurify';
 import { supabaseService, supabaseServer } from '@/lib/supabase/server';
+import { getDashboardUser, requireAdminUser } from '@/lib/auth-admin';
 import { ok, fail } from '@/lib/api-response';
 
 const MAX_MB = Number(process.env.MAX_UPLOAD_MB ?? 2);
@@ -26,15 +26,19 @@ export type AdminCandidate = {
   vote_count: number;
 };
 
-async function requireAdmin() {
-  const sb = await supabaseServer();
-  const { data: user } = await sb.auth.getUser();
-  return user.user ? null : fail('UNAUTHORIZED', 'Login admin dulu');
+async function requireUser() {
+  const user = await getDashboardUser();
+  return user ? null : fail('UNAUTHORIZED', 'Login dulu untuk membuka data kandidat');
 }
 
-/** Daftar kandidat untuk halaman admin — lengkap dengan signed URL foto + jumlah suara. */
+async function requireAdmin() {
+  const user = await requireAdminUser();
+  return user ? null : fail('FORBIDDEN', 'Hanya admin yang bisa mengubah data kandidat');
+}
+
+/** Daftar kandidat untuk dashboard admin/panitia — lengkap dengan signed URL foto + jumlah suara. */
 export async function listCandidatesAdmin() {
-  const denied = await requireAdmin();
+  const denied = await requireUser();
   if (denied) return denied;
   const db = supabaseService();
   const { data, error } = await db
@@ -88,7 +92,9 @@ export async function upsertCandidate(formData: FormData) {
 
   const db = supabaseService();
   const { id, candidate_number, name, class_name } = parsed.data;
-  const cleanVision = DOMPurify.sanitize(parsed.data.vision_mission, { ALLOWED_TAGS: ['p', 'br', 'ul', 'ol', 'li', 'b', 'i'] });
+  // Visi misi selalu dirender sebagai text node (React otomatis escape), jadi tidak
+  // perlu jsdom/DOMPurify. Tag HTML dibuang supaya teks lama tidak tampil mentah.
+  const cleanVision = parsed.data.vision_mission.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
   // Foto lama (kalau mode edit) — dipakai untuk cleanup setelah sukses
   let oldPhotoPath: string | null = null;
