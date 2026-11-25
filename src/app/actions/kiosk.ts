@@ -7,6 +7,18 @@ import { hashPassword, verifyPassword } from '@/lib/auth-kiosk';
 import { rateLimit } from '@/lib/rate-limit';
 import { ok, fail } from '@/lib/api-response';
 
+/** Cookie sesi bilik berumur 12 jam sejak login dan tidak diperbarui. */
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Token bilik selalu 8 huruf kapital, tapi input di layar memakai `uppercase`
+ * CSS & keyboard HP bisa mengirim huruf kecil. Verifikasi mencoba bentuk
+ * ternormalisasi supaya token yang diketik tetap cocok dengan hash bcrypt.
+ */
+function normalizeToken(value: string) {
+  return value.replace(/\s+/g, '').toUpperCase();
+}
+
 const loginSchema = z.object({
   password: z.string().min(8).max(100),
 });
@@ -37,7 +49,7 @@ export async function loginKiosk(input: { password: string }) {
     const { data: created, error: createErr } = await db.from('kiosks').insert({
       kiosk_name: 'Master Bilik',
       username: 'bilik-ipm',
-      password_hash: await hashPassword(input.password),
+      password_hash: await hashPassword(parsed.data.password),
       is_active: true,
     }).select('id, kiosk_name, username').single();
     if (createErr) return fail('INTERNAL_ERROR', createErr.message);
@@ -59,21 +71,35 @@ export async function loginKiosk(input: { password: string }) {
     return ok({ kioskName: created.kiosk_name, sessionId: sessionToken, isNew: true });
   }
 
-  const valid = await verifyPassword(parsed.data.password, master.password_hash);
-  if (!valid) return fail('INVALID_CREDENTIALS', 'Token salah');
+  // Coba input apa adanya dulu (master lama bisa punya password bebas),
+  // lalu versi ternormalisasi untuk token 8 huruf kapital.
+  const raw = parsed.data.password;
+  const normalized = normalizeToken(raw);
+  const valid =
+    (await verifyPassword(raw, master.password_hash)) ||
+    (normalized !== raw && (await verifyPassword(normalized, master.password_hash)));
+  if (!valid) return fail('INVALID_CREDENTIALS', 'Token salah. Pastikan 8 huruf kapital tanpa spasi.');
 
-  // Check session limit + hitung nomor device berikutnya (mulai dari 1)
-  const { data: activeSessions } = await db
+  // Check session limit + cari nomor device kosong terkecil (1..max).
+  // Sesi yang cookie-nya sudah kedaluwarsa (> 12 jam sejak login) dianggap
+  // mati: tanpa ini slot aktif bisa tertahan sesi hantu dan device baru
+  // mem-evict device yang sebenarnya masih hidup.
+  const { data: sessions } = await db
     .from('kiosk_sessions')
-    .select('id, device_name')
+    .select('id, device_name, logged_in_at')
     .eq('kiosk_id', master.id)
     .eq('is_active', true);
 
-  const activeCount = activeSessions?.length ?? 0;
-  const nextDeviceNo = (activeSessions ?? []).reduce((max, s) => {
-    const n = Number(/^Device (\d+)$/.exec(s.device_name ?? '')?.[1] ?? 0);
-    return Math.max(max, n);
-  }, 0) + 1;
+  const now = Date.now();
+  const expiredIds = (sessions ?? [])
+    .filter((s) => now - new Date(s.logged_in_at).getTime() > SESSION_TTL_MS)
+    .map((s) => s.id);
+  if (expiredIds.length > 0) {
+    await db.from('kiosk_sessions').update({ is_active: false }).in('id', expiredIds);
+  }
+  const activeSessions = (sessions ?? []).filter((s) => !expiredIds.includes(s.id));
+
+  const activeCount = activeSessions.length;
 
   const { data: settings } = await db
     .from('election_settings')
@@ -82,8 +108,9 @@ export async function loginKiosk(input: { password: string }) {
     .single();
   const maxSessions = settings?.kiosk_max_sessions ?? 10;
 
+  const evictedIds: string[] = [];
   if (activeCount >= maxSessions) {
-    // Evict oldest session
+    // Evict oldest session supaya device baru tetap bisa masuk
     const { data: oldest } = await db
       .from('kiosk_sessions')
       .select('id')
@@ -94,8 +121,16 @@ export async function loginKiosk(input: { password: string }) {
       .single();
     if (oldest) {
       await db.from('kiosk_sessions').update({ is_active: false }).eq('id', oldest.id);
+      evictedIds.push(oldest.id);
     }
   }
+
+  // Nomor device: pakai slot kosong terkecil supaya label tetap 1..max
+  const usedNames = new Set(
+    activeSessions.filter((s) => !evictedIds.includes(s.id)).map((s) => s.device_name)
+  );
+  let nextDeviceNo = 1;
+  while (usedNames.has(`Device ${nextDeviceNo}`)) nextDeviceNo++;
 
   // Create new session
   const sessionToken = crypto.randomUUID();

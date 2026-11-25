@@ -98,7 +98,10 @@ export default function KioskLoginPage() {
                     id="p"
                     type={show ? 'text' : 'password'}
                     value={p}
-                    onChange={(e) => setP(e.target.value)}
+                    onChange={(e) => setP(e.target.value.toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoComplete="current-password"
                     placeholder="8 huruf kapital"
                     className="app-input px-11 text-center font-mono text-lg font-bold uppercase tracking-[0.2em]"
