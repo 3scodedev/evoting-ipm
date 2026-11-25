@@ -56,7 +56,7 @@
   max-width: 1500px;
   margin: 0 auto;
   flex-direction: column;
-  padding: clamp(18px, 2.4vh, 28px) clamp(20px, 4vw, 64px) clamp(14px, 1.8vh, 20px);
+  padding: clamp(18px, 2.4vh, 28px) clamp(20px, 4vw, 64px) clamp(44px, 6vh, 60px);
 }
 
 /* ------------------------------ Header ------------------------------ */

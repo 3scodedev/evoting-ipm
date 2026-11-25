@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AgentationDev } from '@/components/AgentationDev';
+import { CopyrightWatermark } from '@/components/CopyrightWatermark';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
 const display = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-display' });
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
       >
         {children}
+        <CopyrightWatermark />
         <AgentationDev />
       </body>
     </html>
