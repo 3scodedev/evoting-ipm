@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, PauseCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/Button';
@@ -11,20 +11,45 @@ import { cn } from '@/lib/utils';
 export default function LockedPage() {
   const r = useRouter();
   const [status, setStatus] = useState<'pause' | 'stop' | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const applyStatus = useCallback(
+    (j: { data?: { status?: string } } | null) => {
+      const s = j?.data?.status;
+      if (s === 'start') {
+        r.replace('/kiosk/ballot');
+        return;
+      }
+      if (s === 'pause' || s === 'stop') setStatus(s);
+      else setStatus((prev) => prev ?? 'pause');
+    },
+    [r]
+  );
+
+  // Tombol "Muat Ulang Status" — fetch ulang saja, tanpa reload halaman.
+  const checkNow = useCallback(async () => {
+    setChecking(true);
+    try {
+      // Tanpa `no-store`: response boleh diambil dari cache edge (s-maxage 5 dtk).
+      const x = await fetch('/api/election-status');
+      applyStatus(x.ok ? await x.json() : null);
+    } catch {
+      setStatus((prev) => prev ?? 'pause');
+    } finally {
+      setChecking(false);
+    }
+  }, [applyStatus]);
 
   useEffect(() => {
     let alive = true;
     async function check() {
       try {
-        const x = await fetch('/api/election-status', { cache: 'no-store' });
+        const x = await fetch('/api/election-status');
         const j = x.ok ? await x.json() : null;
-        if (!alive) return;
-        if (j?.data?.status === 'start') r.replace('/kiosk/ballot');
-        else if (j?.data?.status === 'pause' || j?.data?.status === 'stop') setStatus(j.data.status);
-        else setStatus((s) => s ?? 'pause');
+        if (alive) applyStatus(j);
       } catch {
         // Offline → tetap tampilkan status terakhir (atau default jeda).
-        if (alive) setStatus((s) => s ?? 'pause');
+        if (alive) setStatus((prev) => prev ?? 'pause');
       }
     }
     check();
@@ -33,7 +58,7 @@ export default function LockedPage() {
       alive = false;
       clearInterval(t);
     };
-  }, [r]);
+  }, [applyStatus]);
 
   if (status === null) return <LockedSkeleton />;
 
@@ -89,7 +114,8 @@ export default function LockedPage() {
 
           <Button
             variant="secondary"
-            onClick={() => window.location.reload()}
+            loading={checking}
+            onClick={checkNow}
             className="mt-6 w-full"
           >
             <RefreshCw className="h-4 w-4" aria-hidden /> Muat Ulang Status

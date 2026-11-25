@@ -38,6 +38,7 @@ export default function OfflinePage() {
 
           <Link
             href="/"
+            prefetch={false}
             className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-ink/55 transition hover:text-ink"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden /> Kembali ke Beranda

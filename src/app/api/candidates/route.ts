@@ -49,12 +49,19 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({
-    success: true,
-    data: rows.map((c) => ({
-      ...c,
-      photo_url: c.photo_url ? signed.get(c.photo_url) ?? null : null,
-    })),
-    error: null,
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      data: rows.map((c) => ({
+        ...c,
+        photo_url: c.photo_url ? signed.get(c.photo_url) ?? null : null,
+      })),
+      error: null,
+    },
+    {
+      // 6 bilik memuat daftar yang sama saat hari-H dimulai: biarkan edge
+      // menyajikannya dari cache supaya hanya 1 invocation yang tetap bayar CPU.
+      headers: { 'Cache-Control': 'public, max-age=0, s-maxage=30, stale-while-revalidate=60' },
+    }
+  );
 }

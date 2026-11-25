@@ -74,7 +74,7 @@ DATABASE_URL=postgresql://postgres:xxxxx@db.xyz.supabase.co:5432/postgres
 Migration ada di `supabase/migrations/` (jalankan berurutan dari `001_enums` sampai file terbaru). Pilih salah satu:
 
 **Opsi A — via Supabase Dashboard (paling mudah, tanpa CLI):**
-Buka **SQL Editor → New query**, jalankan isi file **berurutan**: `001_enums.sql`, `002_tables.sql`, `003_indexes.sql`, `004_rls.sql`, `005_rpc.sql`, `006_storage.sql`, lalu migration lanjutan sampai `013_reset_votes.sql`.
+Buka **SQL Editor → New query**, jalankan isi file **berurutan**: `001_enums.sql`, `002_tables.sql`, `003_indexes.sql`, `004_rls.sql`, `005_rpc.sql`, `006_storage.sql`, lalu migration lanjutan sampai `014_fast_anonymous_vote.sql`.
 
 **Opsi B — via Supabase CLI:**
 

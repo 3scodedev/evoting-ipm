@@ -36,6 +36,7 @@ export default function NotFound() {
             </Link>
             <Link
               href="/admin/dashboard"
+              prefetch={false}
               className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink bg-white px-5 py-3 text-sm font-bold text-ink shadow-hard-sm transition hover:-translate-y-0.5 hover:bg-brand-yellow/40 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
             >
               <LayoutDashboard className="h-4 w-4" aria-hidden /> Dashboard

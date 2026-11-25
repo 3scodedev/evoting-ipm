@@ -8,6 +8,7 @@ import { Badge } from '@/components/Badge';
 import { ToastStack, useToasts } from '@/components/Toast';
 import { PageHeader, Panel } from '@/components/admin/Panel';
 import { ReportsSkeleton } from '@/components/skeletons/ReportsSkeleton';
+import { useDebouncedCallback } from '@/lib/use-debounced-callback';
 import { cn } from '@/lib/utils';
 import { BarChart3, Download, FileDown, FileText, Printer, Trophy } from 'lucide-react';
 
@@ -44,21 +45,49 @@ export default function ReportsPage() {
     }
   }, []);
 
+  // Event kandidat dipatch langsung dari payload (vote_count ikut terkirim),
+  // election_settings jarang berubah jadi boleh langsung load().
+  const debouncedLoad = useDebouncedCallback(load, 500);
+
   useEffect(() => {
     load();
     const sb = supabaseBrowser();
     const ch = sb
       .channel('reports')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidates' }, () => load())
+      // Subscription `votes` dihapus: total & ranking diturunkan dari
+      // candidates.vote_count (baris `total`/`ranked`), jadi event votes
+      // hanya duplikat beban tanpa menambah informasi apa pun.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidates' }, (p) => {
+        const next = p.new as Partial<Row> | null;
+        const num = next?.candidate_number;
+        const count = next?.vote_count;
+        if (typeof num === 'number' && typeof count === 'number') {
+          setRows((cur) => {
+            const idx = cur.findIndex((r) => r.candidate_number === num);
+            if (idx === -1) return cur;
+            const copy = [...cur];
+            copy[idx] = {
+              ...copy[idx],
+              name: next?.name ?? copy[idx].name,
+              class_name: next?.class_name ?? copy[idx].class_name,
+              vote_count: count,
+            };
+            return copy;
+          });
+          setUpdatedAt(new Date());
+          return;
+        }
+        debouncedLoad();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'election_settings' }, () => load())
       .subscribe((s) => setLive(s === 'SUBSCRIBED'));
-    const t = setInterval(load, 5000);
+    // Realtime jalur utama; polling 30 dtk hanya resync (dulu 5 dtk).
+    const t = setInterval(load, 30_000);
     return () => {
       sb.removeChannel(ch);
       clearInterval(t);
     };
-  }, [load]);
+  }, [load, debouncedLoad]);
 
   async function handlePrint() {
     if (busy) return;

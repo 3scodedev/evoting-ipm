@@ -83,14 +83,15 @@ function AdminShell({ path, children }: { path: string; children: React.ReactNod
       <div className="min-h-screen md:flex">
         {/* Sidebar desktop */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r-2 border-ink bg-white/75 p-4 backdrop-blur-md md:flex">
-          <Link href="/" className="group flex items-center gap-3 px-1" aria-label="Kembali ke beranda">
+          <Link href="/" prefetch={false} className="group flex items-center gap-3 px-1" aria-label="Kembali ke beranda">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-ink bg-white shadow-hard-sm transition group-hover:-rotate-6 group-hover:shadow-hard-yellow">
               <Image
-                src="/images/logo-ipm.png"
+                src="/images/logo-ipm-sm.webp"
                 alt="Logo IPM"
-                width={165}
-                height={320}
+                width={96}
+                height={96}
                 priority
+                unoptimized
                 className="h-7 w-auto"
               />
             </span>
@@ -114,6 +115,7 @@ function AdminShell({ path, children }: { path: string; children: React.ReactNod
                 <Link
                   key={m.href}
                   href={m.href}
+                  prefetch={false}
                   className={cn(
                     'flex items-center gap-3 rounded-full border-2 px-4 py-2.5 text-sm font-bold transition duration-200',
                     active
@@ -163,6 +165,7 @@ function AdminShell({ path, children }: { path: string; children: React.ReactNod
               <Link
                 key={m.href}
                 href={m.href}
+                prefetch={false}
                 className={cn(
                   'flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-extrabold uppercase tracking-wide transition-colors',
                   active ? 'text-ink' : 'text-ink/45'

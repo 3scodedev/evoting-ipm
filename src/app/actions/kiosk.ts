@@ -168,13 +168,12 @@ export async function kioskPing() {
   const sessionToken = jar.get('kiosk-session')?.value;
   if (!sessionToken) return fail('UNAUTHORIZED', 'Sesi bilik tidak valid');
   const db = supabaseService();
-  const now = new Date().toISOString();
-  await db.from('kiosk_sessions').update({ last_ping: now }).eq('session_token', sessionToken);
-  const { data: sess } = await db.from('kiosk_sessions').select('kiosk_id').eq('session_token', sessionToken).single();
-  if (sess?.kiosk_id) {
-    await db.from('kiosks').update({ last_ping: now }).eq('id', sess.kiosk_id);
-  }
-  return ok({ server_time: now });
+  // Satu RPC = satu round trip (sebelumnya 3 query berurutan tiap 30 dtk/bilik).
+  const { data, error } = await db.rpc('kiosk_ping', { p_session_token: sessionToken });
+  if (error) return fail('INTERNAL_ERROR', error.message);
+  const d = data as { success: boolean; code: string; server_time?: string };
+  if (!d.success) return fail('UNAUTHORIZED', 'Sesi bilik tidak valid');
+  return ok({ server_time: d.server_time });
 }
 
 export async function logoutKiosk() {
@@ -186,19 +185,4 @@ export async function logoutKiosk() {
   }
   jar.delete('kiosk-session');
   return ok({ loggedOut: true });
-}
-
-/** Resolve session_token cookie value → { kioskId, sessionId } or null. */
-export async function resolveKioskSession() {
-  const jar = await cookies();
-  const sessionToken = jar.get('kiosk-session')?.value;
-  if (!sessionToken) return null;
-  const db = supabaseService();
-  const { data } = await db
-    .from('kiosk_sessions')
-    .select('id, kiosk_id, is_active')
-    .eq('session_token', sessionToken)
-    .single();
-  if (!data || !data.is_active) return null;
-  return { kioskId: data.kiosk_id, sessionId: data.id };
 }

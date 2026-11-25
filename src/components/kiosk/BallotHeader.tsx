@@ -11,15 +11,17 @@ export function BallotHeader() {
       <div className="mx-auto flex max-w-[1760px] items-center gap-3 px-4 py-3">
         <Link
           href="/"
+          prefetch={false}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-ink bg-white shadow-[2px_2px_0_#131313] transition hover:-rotate-6 hover:bg-brand-yellow"
           aria-label="E-Voting IPM — beranda"
         >
           <Image
-            src="/images/logo-ipm.png"
+            src="/images/logo-ipm-sm.webp"
             alt="Logo IPM"
-            width={165}
-            height={320}
+            width={96}
+            height={96}
             priority
+            unoptimized
             className="h-7 w-auto"
           />
         </Link>

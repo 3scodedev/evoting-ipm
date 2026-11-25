@@ -40,9 +40,9 @@ export default function KioskLoginPage() {
       />
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 py-1">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="E-Voting IPM — beranda">
+        <Link href="/" prefetch={false} className="flex items-center gap-2.5" aria-label="E-Voting IPM — beranda">
           <span className="grid h-10 w-10 place-items-center rounded-full border-2 border-ink bg-white shadow-[2px_2px_0_#131313]">
-            <Image src="/images/logo-ipm.png" alt="Logo IPM" width={165} height={320} priority className="h-6 w-auto" />
+            <Image src="/images/logo-ipm-sm.webp" alt="Logo IPM" width={96} height={96} priority unoptimized className="h-6 w-auto" />
           </span>
           <span>
             <span className="block text-[8px] font-extrabold uppercase tracking-[0.18em] text-ink/45">
@@ -67,11 +67,12 @@ export default function KioskLoginPage() {
               <div className="flex items-center gap-3">
                 <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full border-2 border-ink bg-brand-yellow shadow-hard-sm">
                   <Image
-                    src="/images/logo-ipm.png"
+                    src="/images/logo-ipm-sm.webp"
                     alt="Logo IPM"
-                    width={165}
-                    height={320}
+                    width={96}
+                    height={96}
                     priority
+                    unoptimized
                     className="h-9 w-auto"
                   />
                   <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border border-ink bg-brand-red" aria-hidden />
@@ -139,6 +140,7 @@ export default function KioskLoginPage() {
 
           <Link
             href="/"
+            prefetch={false}
             className="mx-auto mt-5 flex w-fit items-center gap-2 text-sm font-bold text-ink/55 transition hover:text-ink"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />

@@ -76,6 +76,7 @@ export default function AdminLoginPage() {
               width={330}
               height={639}
               priority
+              unoptimized
             />
           </div>
 
@@ -111,11 +112,12 @@ export default function AdminLoginPage() {
           <Link href="/" className={s.brand} aria-label="E-Voting IPM — beranda">
             <span className={s.brandMark}>
               <Image
-                src="/images/logo-smk.png"
+                src="/images/logo-smk-sm.webp"
                 alt="Logo SMK Muhammadiyah Kandanghaur"
-                width={264}
-                height={384}
+                width={96}
+                height={96}
                 priority
+                unoptimized
               />
             </span>
             <span>

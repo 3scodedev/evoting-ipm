@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 export type Candidate = {
@@ -12,11 +13,13 @@ export type Candidate = {
 export function CandidateCard({
   c,
   selected,
+  disabled,
   onSelect,
   style,
 }: {
   c: Candidate;
   selected?: boolean;
+  disabled?: boolean;
   onSelect?: () => void;
   style?: React.CSSProperties;
 }) {
@@ -25,21 +28,23 @@ export function CandidateCard({
       type="button"
       role="radio"
       aria-checked={!!selected}
+      disabled={disabled}
       onClick={onSelect}
       style={style}
       className={cn(
-        'group relative overflow-hidden rounded-[22px] border-2 border-ink bg-white text-left shadow-hard-sm transition duration-200 hover:-translate-y-1 hover:shadow-hard focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-sky',
+        'group relative overflow-hidden rounded-[22px] border-2 border-ink bg-white text-left shadow-hard-sm transition duration-200 hover:-translate-y-1 hover:shadow-hard focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-sky disabled:pointer-events-none disabled:opacity-60',
         selected && 'bg-brand-yellow/15 ring-4 ring-brand-yellow shadow-hard'
       )}
     >
       <div className="relative aspect-[4/3] overflow-hidden border-b-2 border-ink bg-brand-sky-light/45">
         {c.photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={c.photo_url}
             alt={`Foto kandidat ${c.candidate_number} ${c.name}`}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-            loading="lazy"
+            fill
+            unoptimized
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            className="object-cover transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (
           <span className="grid h-full w-full place-items-center font-[family-name:var(--font-display)] text-6xl font-extrabold text-ink/20">

@@ -1,9 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Vote, X } from 'lucide-react';
+import { AlertCircle, Check, Vote, X } from 'lucide-react';
 import { BallotHeader } from '@/components/kiosk/BallotHeader';
 import { CandidateCard, type Candidate } from '@/components/kiosk/CandidateCard';
 import { BallotSkeleton } from '@/components/skeletons/BallotSkeleton';
@@ -11,91 +11,131 @@ import { Button } from '@/components/Button';
 import { castVote } from '@/app/actions/vote';
 import { logoutKiosk } from '@/app/actions/kiosk';
 
-const DEMO: Candidate[] = [
-  { id: '1', candidate_number: 1, name: 'Ananda Pratama', class_name: 'XI RPL 1', vision_mission: 'IPM Berkemajuan: literasi, tahfidz, dan kewirausahaan pelajar.', photo_url: null },
-  { id: '2', candidate_number: 2, name: 'Bemby Ghulam', class_name: 'XI TKJ 2', vision_mission: 'Aktif, kreatif, dan kolaboratif untuk SMK yang unggul.', photo_url: null },
-  { id: '3', candidate_number: 3, name: 'Citra Lestari', class_name: 'XII AKL 1', vision_mission: 'Sekolah bersih, organisasi transparan, kegiatan bermanfaat.', photo_url: null },
-];
+/** Layar terima kasih tampil singkat, lalu bilik reset tanpa navigasi/reload. */
+const THANKS_MS = 3000;
+/**
+ * Cek status pemilihan cukup tiap 30 dtk: castVote sudah menolak suara saat
+ * jeda/stop, jadi polling ini hanya mempercepat tampilan layar kunci.
+ */
+const STATUS_POLL_MS = 30_000;
 
 export default function BallotPage() {
   const r = useRouter();
   const [list, setList] = useState<Candidate[] | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [sending, setSending] = useState(false);
+  const [thanks, setThanks] = useState(false);
   const [err, setErr] = useState('');
 
+  // Kunci sinkron: dua klik dalam tick yang sama tetap hanya mengirim satu suara.
+  const inFlight = useRef(false);
+  // true selama request kirim + layar terima kasih → blokir semua interaksi.
+  const lockedRef = useRef(false);
+
   useEffect(() => {
-    let alive = true;
-    fetch('/api/candidates')
-      .then((x) => (x.ok ? x.json() : null))
-      .then((j) => {
-        if (!alive) return;
-        if (j?.success && Array.isArray(j.data)) setList(j.data as Candidate[]);
-        else setList(DEMO); // server tidak terjangkau → mode demo
-      })
-      .catch(() => {
-        if (alive) setList(DEMO);
-      });
-    return () => {
-      alive = false;
-    };
+    lockedRef.current = sending || thanks;
+  }, [sending, thanks]);
+
+  const loadCandidates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/candidates');
+      const j = res.ok ? await res.json() : null;
+      if (j?.success && Array.isArray(j.data)) {
+        setList(j.data as Candidate[]);
+        setLoadErr(false);
+      } else {
+        setLoadErr(true);
+      }
+    } catch {
+      // Tanpa fallback kandidat palsu: pemilih tidak boleh melihat paslon demo.
+      setLoadErr(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Dimuat sekali per sesi bilik. Reset setelah vote TIDAK memanggil ini lagi.
+  useEffect(() => {
+    loadCandidates();
+  }, [loadCandidates]);
 
   // Kalau panitia menjeda/menutup pemilihan, bilik langsung keluar dari surat suara.
   useEffect(() => {
     let alive = true;
     async function checkStatus() {
+      if (document.visibilityState !== 'visible' || lockedRef.current) return;
       try {
-        const res = await fetch('/api/election-status', { cache: 'no-store' });
+        // Tanpa `no-store`: response boleh diambil dari cache edge (s-maxage 5 dtk).
+        const res = await fetch('/api/election-status');
         if (!res.ok) return;
         const j = await res.json();
         const status = j?.data?.status;
-        if (alive && status && status !== 'start') r.replace('/kiosk/locked');
+        if (alive && !lockedRef.current && status && status !== 'start') r.replace('/kiosk/locked');
       } catch {
         // Offline / API gagal → tetap di halaman; castVote jadi pengaman terakhir.
       }
     }
     checkStatus();
-    const t = setInterval(checkStatus, 10_000);
+    const t = setInterval(checkStatus, STATUS_POLL_MS);
     return () => {
       alive = false;
       clearInterval(t);
     };
   }, [r]);
 
+  // Setelah suara tersimpan: tampilkan terima kasih, lalu reset state bilik.
+  useEffect(() => {
+    if (!thanks) return;
+    const t = setTimeout(() => {
+      setThanks(false);
+      setConfirm(false);
+      setSel(null);
+      setErr('');
+    }, THANKS_MS);
+    return () => clearTimeout(t);
+  }, [thanks]);
+
   const chosen = list?.find((c) => c.id === sel);
 
   async function kirim() {
-    if (!sel) return;
+    if (!sel || inFlight.current || thanks) return;
+    inFlight.current = true;
     setSending(true);
     setErr('');
-    const res = await castVote({ candidate_id: sel });
-    setSending(false);
-    if (!res.success) {
-      if (res.error.code === 'FORBIDDEN' || res.error.code === 'UNAUTHORIZED') {
-        setConfirm(false);
-        setErr(`${res.error.message} Mengalihkan ke halaman login...`);
-        setTimeout(() => r.replace('/kiosk/login'), 1500);
+    try {
+      const res = await castVote({ candidate_id: sel });
+      if (!res.success) {
+        if (res.error.code === 'FORBIDDEN' || res.error.code === 'UNAUTHORIZED') {
+          setConfirm(false);
+          setErr(`${res.error.message} Mengalihkan ke halaman login...`);
+          setTimeout(() => r.replace('/kiosk/login'), 1500);
+          return;
+        }
+        if (res.error.code === 'ELECTION_CLOSED') {
+          setConfirm(false);
+          r.replace('/kiosk/locked');
+          return;
+        }
+        // Error biasa: biarkan dialog terbuka supaya pemilih bisa langsung coba lagi.
+        setErr(
+          res.error.code === 'NOT_FOUND'
+            ? 'Kandidat tidak tersedia. Tutup dialog lalu pilih ulang kandidat.'
+            : res.error.code === 'INTERNAL_ERROR'
+              ? 'Gagal mengirim suara. Coba lagi sebentar lagi.'
+              : res.error.message
+        );
         return;
       }
-      if (res.error.code === 'ELECTION_CLOSED') {
-        setConfirm(false);
-        r.replace('/kiosk/locked');
-        return;
-      }
-      // Error biasa: biarkan dialog terbuka supaya pemilih bisa langsung coba lagi.
-      setErr(
-        res.error.code === 'NOT_FOUND'
-          ? 'Kandidat tidak ditemukan. Tutup dialog lalu pilih ulang kandidat.'
-          : res.error.code === 'INTERNAL_ERROR'
-            ? 'Gagal mengirim suara. Coba lagi sebentar lagi.'
-            : res.error.message
-      );
-      return;
+      setConfirm(false);
+      setThanks(true);
+    } finally {
+      setSending(false);
+      inFlight.current = false;
     }
-    setConfirm(false);
-    r.push('/kiosk/success');
   }
 
   async function kunciBilik() {
@@ -103,9 +143,9 @@ export default function BallotPage() {
     r.push('/kiosk/login');
   }
 
-  if (list === null) return <BallotSkeleton />;
+  if (list === null && !loadErr) return <BallotSkeleton />;
 
-  if (list.length === 0) {
+  if (list === null || list.length === 0) {
     return (
       <main className="flex min-h-screen flex-col animate-fade-in">
         <BallotHeader />
@@ -114,11 +154,20 @@ export default function BallotPage() {
             <span className="app-icon mx-auto h-14 w-14 rounded-full">
               <Vote className="h-6 w-6" aria-hidden />
             </span>
-            <h1 className="app-h1 mt-4">Belum ada kandidat</h1>
-            <p className="mt-2 text-sm font-medium text-ink/55">Panitia belum input paslon.</p>
-            <Button className="mt-5" variant="secondary" onClick={kunciBilik}>
-              Kunci Bilik
-            </Button>
+            <h1 className="app-h1 mt-4">{loadErr ? 'Gagal memuat surat suara' : 'Belum ada kandidat'}</h1>
+            <p className="mt-2 text-sm font-medium text-ink/55">
+              {loadErr ? 'Periksa koneksi bilik lalu coba lagi.' : 'Panitia belum input paslon.'}
+            </p>
+            <div className="mt-5 flex justify-center gap-2.5">
+              {loadErr && (
+                <Button variant="primary" loading={loading} onClick={loadCandidates}>
+                  Coba Lagi
+                </Button>
+              )}
+              <Button variant="secondary" onClick={kunciBilik}>
+                Kunci Bilik
+              </Button>
+            </div>
           </div>
         </div>
       </main>
@@ -148,9 +197,21 @@ export default function BallotPage() {
             </span>
           </div>
 
-          <div role="radiogroup" aria-label="Kandidat" className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4 stagger-fade">
+          <div
+            role="radiogroup"
+            aria-label="Kandidat"
+            aria-busy={sending || thanks}
+            className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4 stagger-fade"
+          >
             {list.map((c, i) => (
-              <CandidateCard key={c.id} c={c} selected={sel === c.id} onSelect={() => setSel(c.id)} style={{ '--i': Math.min(i, 8) } as React.CSSProperties} />
+              <CandidateCard
+                key={c.id}
+                c={c}
+                selected={sel === c.id}
+                disabled={sending || thanks}
+                onSelect={() => setSel(c.id)}
+                style={{ '--i': Math.min(i, 8) } as React.CSSProperties}
+              />
             ))}
           </div>
         </div>
@@ -180,7 +241,7 @@ export default function BallotPage() {
             <Button
               variant="primary"
               size="lg"
-              disabled={!sel}
+              disabled={!sel || sending || thanks}
               onClick={() => {
                 setErr('');
                 setConfirm(true);
@@ -190,12 +251,13 @@ export default function BallotPage() {
             >
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-ink bg-brand-yellow">
                 <Image
-                  src="/images/paku-logam.png"
+                  src="/images/paku-coblos.webp"
                   alt=""
-                  width={1254}
-                  height={1254}
+                  width={128}
+                  height={128}
                   aria-hidden
                   draggable={false}
+                  unoptimized
                   className={`h-8 w-8 transition ${sel ? '' : 'grayscale opacity-40'}`}
                 />
               </span>
@@ -205,7 +267,7 @@ export default function BallotPage() {
         </div>
       </div>
 
-      {confirm && chosen && (
+      {confirm && chosen && !thanks && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-ink/55 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-[24px] border-2 border-ink bg-white shadow-hard-lg">
             <div className="h-2 bg-brand-sky" aria-hidden />
@@ -231,6 +293,7 @@ export default function BallotPage() {
               <div className="mt-6 grid grid-cols-2 gap-2.5">
                 <Button
                   variant="secondary"
+                  disabled={sending}
                   onClick={() => {
                     setConfirm(false);
                     setErr('');
@@ -242,6 +305,34 @@ export default function BallotPage() {
                   Ya, Kirim Suara
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Layar terima kasih — state React, bukan navigasi, jadi foto & halaman tidak dimuat ulang. */}
+      {thanks && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Suara tercatat"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-paper/95 p-6 text-center backdrop-blur-sm"
+        >
+          <div className="app-card w-full max-w-sm overflow-hidden animate-fade-in">
+            <div className="h-2 bg-gradient-to-r from-brand-sky via-brand-yellow to-brand-red" aria-hidden />
+            <div className="p-8" aria-live="assertive">
+              <span className="mx-auto grid h-20 w-20 place-items-center rounded-full border-2 border-ink bg-brand-yellow shadow-hard">
+                <span className="grid h-14 w-14 place-items-center rounded-full border-2 border-ink bg-white">
+                  <Check className="h-8 w-8" strokeWidth={3} aria-hidden />
+                </span>
+              </span>
+              <p className="app-kicker mt-4">Suara tercatat</p>
+              <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-tight">
+                Terima kasih!
+              </h2>
+              <p className="mt-2 text-sm font-semibold text-ink/55">
+                Bilik kembali ke layar pilihan untuk pemilih berikutnya.
+              </p>
             </div>
           </div>
         </div>

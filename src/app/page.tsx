@@ -48,11 +48,12 @@ export default function Home() {
           <Link href="/" className={s.brand} aria-label="E-Voting IPM — beranda">
             <span className={s.brandMark}>
               <Image
-                src="/images/logo-smk.png"
+                src="/images/logo-smk-sm.webp"
                 alt="Logo SMK Muhammadiyah Kandanghaur"
-                width={264}
-                height={384}
+                width={96}
+                height={96}
                 priority
+                unoptimized
               />
             </span>
             <span>
@@ -66,7 +67,7 @@ export default function Home() {
               <span className={s.liveDot} aria-hidden="true" />
               Pemilihan 2026/2027
             </span>
-            <Link href="/admin/login" className={s.headerLink}>
+            <Link href="/admin/login" className={s.headerLink} prefetch={false}>
               Command Center
               <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
@@ -122,7 +123,7 @@ export default function Home() {
                   <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
                 </span>
               </Link>
-              <Link href="/admin/login" className={s.secondaryCta}>
+              <Link href="/admin/login" className={s.secondaryCta} prefetch={false}>
                 <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
                 Command Center
               </Link>
@@ -154,6 +155,7 @@ export default function Home() {
                   width={330}
                   height={639}
                   priority
+                  unoptimized
                 />
               </div>
             </div>

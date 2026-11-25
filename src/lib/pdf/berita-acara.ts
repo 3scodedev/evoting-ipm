@@ -29,8 +29,10 @@ const ML = 15;
 const MR = 15;
 const RIGHT = PAGE.W - MR; // 195
 const CW = PAGE.W - ML - MR; // 180
-const XC1 = 62; // pusat blok tanda tangan kiri
-const XC2 = 148; // pusat blok tanda tangan kanan
+/** Empat kolom tanda tangan: 180mm konten dibagi rata. */
+const SIG_XS = [37.5, 82.5, 127.5, 172.5];
+const SIG_LABELS = ['Pembina IPM', 'Ketua Umum', 'Saksi 1', 'Saksi 2'];
+const SIG_HALF_W = 18;
 const FONT = 'times';
 
 const COL = {
@@ -389,18 +391,22 @@ function drawHashBox(doc: jsPDF, y: number, hash: string | null, compact: boolea
 }
 
 function drawSignatures(doc: jsPDF, y: number, printedAt: Date, lineOffset: number, compact: boolean): void {
-  const size = compact ? 9.5 : 10.5;
+  const size = compact ? 8.6 : 9.6;
+  const labelDrop = compact ? 10.5 : 12;
+
   setFont(doc, 'normal', size);
   textColor(doc, CLR.ink);
   doc.text(`Kandanghaur, ${MID_DATE.format(printedAt)}`, RIGHT, y, { align: 'right' });
 
-  doc.text('Ketua Panitia', XC1, y + (compact ? 10.5 : 12), { align: 'center' });
-  doc.text('Saksi', XC2, y + (compact ? 10.5 : 12), { align: 'center' });
-
   lineColor(doc, CLR.muted);
   doc.setLineWidth(0.3);
-  doc.line(XC1 - 23, y + lineOffset, XC1 + 23, y + lineOffset);
-  doc.line(XC2 - 23, y + lineOffset, XC2 + 23, y + lineOffset);
+
+  SIG_XS.forEach((xc, i) => {
+    setFont(doc, 'normal', size);
+    textColor(doc, CLR.ink);
+    doc.text(SIG_LABELS[i], xc, y + labelDrop, { align: 'center' });
+    doc.line(xc - SIG_HALF_W, y + lineOffset, xc + SIG_HALF_W, y + lineOffset);
+  });
 }
 
 function drawFooters(doc: jsPDF, printedAt: Date): void {

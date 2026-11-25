@@ -15,6 +15,7 @@ import {
   clearInactiveSessions,
   getKioskSessions,
 } from '@/app/actions/admin';
+import { useDebouncedCallback } from '@/lib/use-debounced-callback';
 import { REALTIME_CHANNELS, isKioskLive } from '@/lib/realtime-channels';
 import {
   MonitorSmartphone,
@@ -104,20 +105,26 @@ export default function KiosksPage() {
     }
   }, [push]);
 
+  // load() memanggil Server Action (CPU Vercel), jadi burst event digabung dulu.
+  const debouncedLoad = useDebouncedCallback(load, 500);
+
   useEffect(() => {
     load();
     const sb = supabaseBrowser();
     const ch = sb
       .channel(REALTIME_CHANNELS.kioskSessions)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosk_sessions' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosks' }, () => load())
+      // Ping tiap bilik setiap 30 dtk memicu 2 event beruntun per device.
+      // Tanpa debounce, 5 bilik = 10 Server Action call per siklus ping.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosk_sessions' }, () => debouncedLoad())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosks' }, () => debouncedLoad())
       .subscribe((s) => setLive(s === 'SUBSCRIBED'));
     const tick = setInterval(() => setNow(Date.now()), 5_000);
-    // Fallback kalau WebSocket putus / publication realtime belum aktif:
-    // session tetap ter-update tanpa harus reload halaman.
-    const poll = setInterval(load, 10_000);
+    // Fallback kalau WebSocket putus / publication realtime belum aktif.
+    // 30 dtk (dulu 10 dtk): load() memanggil Server Action yang memakan CPU Vercel.
+    const poll = setInterval(load, 30_000);
+    // visibilitychange + focus sering terpicu hampir bersamaan → debounce juga.
     const refreshOnVisible = () => {
-      if (document.visibilityState === 'visible') load();
+      if (document.visibilityState === 'visible') debouncedLoad();
     };
     document.addEventListener('visibilitychange', refreshOnVisible);
     window.addEventListener('focus', refreshOnVisible);
@@ -128,7 +135,7 @@ export default function KiosksPage() {
       document.removeEventListener('visibilitychange', refreshOnVisible);
       window.removeEventListener('focus', refreshOnVisible);
     };
-  }, [load]);
+  }, [load, debouncedLoad]);
 
   async function confirmGenerateToken() {
     setPendingGenerate(false);

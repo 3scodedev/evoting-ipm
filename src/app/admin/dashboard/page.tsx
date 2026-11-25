@@ -24,6 +24,7 @@ import { useAdminRole } from '@/components/admin/AdminRole';
 import { resetVotes, setElectionStatus } from '@/app/actions/admin';
 import { listCandidatesAdmin } from '@/app/actions/candidates';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
+import { useDebouncedCallback } from '@/lib/use-debounced-callback';
 import { isKioskLive } from '@/lib/realtime-channels';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
@@ -282,21 +283,30 @@ export default function DashboardPage() {
         setStats({ votes: list.reduce((sum, row) => sum + row.vote_count, 0), lastVote: null });
         return;
       }
-      const [{ data: c }, { count: votes }, { data: last }, { data: k }, { data: e }] = await Promise.all([
+      // Total suara diturunkan dari `candidates.vote_count` (sumber yang sama
+      // dipakai Berita Acara & export). Query `count: 'exact'` di tabel votes
+      // dihapus: di 18k baris itu sequential scan yang makin mahal tiap reload.
+      // `last_vote` tetap di-query karena murah (index idx_votes_created, LIMIT 1)
+      // dan dibutuhkan untuk mengisi "Suara terakhir" saat halaman pertama dibuka.
+      const [{ data: c }, { data: last }, { data: k }, { data: e }] = await Promise.all([
         sb.from('candidates').select('candidate_number, name, vote_count').order('candidate_number'),
-        sb.from('votes').select('id', { count: 'exact', head: true }),
         sb.from('votes').select('created_at').order('created_at', { ascending: false }).limit(1),
         sb.from('kiosk_sessions').select('id, device_name, last_ping').eq('is_active', true).order('last_ping', { ascending: false }),
         sb.from('election_settings').select('status').eq('id', 1).single(),
       ]);
-      setRows((c as Row[]) ?? []);
-      setStats({ votes: votes ?? 0, lastVote: last?.[0]?.created_at ?? null });
+      const list = (c as Row[]) ?? [];
+      setRows(list);
+      setStats({ votes: list.reduce((sum, row) => sum + row.vote_count, 0), lastVote: last?.[0]?.created_at ?? null });
       setKiosks((k as typeof kiosks) ?? []);
       if (e?.status) setElection(e.status as ElectionStatus);
     } finally {
       setReady(true);
     }
   }, [isAdmin]);
+
+  // Event realtime yang tidak bisa dipatch langsung dari payload digabung di
+  // sini, supaya burst (mis. 5 bilik ping bersamaan) jadi satu reload.
+  const debouncedLoad = useDebouncedCallback(load, 500);
 
   const loadPhotos = useCallback(async () => {
     try {
@@ -319,11 +329,38 @@ export default function DashboardPage() {
     const sb = supabaseBrowser();
     const ch = sb
       .channel('dash')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidates' }, () => load());
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'candidates' }, (p) => {
+        // UPDATE/INSERT membawa seluruh kolom (replica identity DEFAULT), jadi
+        // vote_count terbaru bisa langsung dipakai tanpa query sama sekali.
+        const next = p.new as Partial<Row> | null;
+        const num = next?.candidate_number;
+        const count = next?.vote_count;
+        if (typeof num === 'number' && typeof count === 'number') {
+          setRows((cur) => {
+            const idx = cur.findIndex((r) => r.candidate_number === num);
+            if (idx === -1) return cur; // kandidat baru → biar load() yang urus urutan
+            const copy = [...cur];
+            copy[idx] = { ...copy[idx], name: next?.name ?? copy[idx].name, vote_count: count };
+            return copy;
+          });
+          return;
+        }
+        // DELETE atau payload tak lengkap → refetch teredam.
+        debouncedLoad();
+      });
     if (isAdmin) {
-      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, () => load())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosks' }, () => load())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosk_sessions' }, () => load())
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes' }, (p) => {
+        // Satu suara masuk: cukup tambah counter lokal + catat waktunya.
+        // Tanpa query — inilah yang memangkas ~180k query jadi nol.
+        const created = (p.new as { created_at?: string } | null)?.created_at;
+        setStats((s) => ({ votes: s.votes + 1, lastVote: created ?? s.lastVote }));
+      })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'votes' }, () => {
+          // Hanya terjadi saat Reset Suara — jarang, jadi refetch penuh aman.
+          load();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosks' }, () => debouncedLoad())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'kiosk_sessions' }, () => debouncedLoad())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'election_settings' }, (p) => {
           const s = (p.new as { status?: ElectionStatus } | null)?.status;
           if (s) setElection(s);
@@ -331,7 +368,9 @@ export default function DashboardPage() {
         });
     }
     ch.subscribe();
-    const t = setInterval(load, 5000);
+    // Realtime adalah jalur utama. Polling 30 dtk hanya resync otoritatif:
+    // menangkap event yang terlewat saat WebSocket putus dan mengoreksi drift.
+    const t = setInterval(load, 30_000);
     const tick = setInterval(() => setNow(Date.now()), 5000);
     return () => {
       sb.removeChannel(ch);
@@ -339,7 +378,7 @@ export default function DashboardPage() {
       clearInterval(t);
       clearInterval(tick);
     };
-  }, [load, loadPhotos, isAdmin]);
+  }, [load, loadPhotos, isAdmin, debouncedLoad]);
 
   async function handleToggleElection() {
     if (!election || switching) return;
@@ -569,7 +608,7 @@ export default function DashboardPage() {
         requirePassword
         passwordLabel="Password reset"
         passwordPlaceholder="Masukkan password reset"
-        passwordHint="Wajib diisi untuk mencegah reset yang tidak disengaja."
+        passwordHint="Bukan password login admin — ini RESET_VOTES_PASSWORD yang diatur panitia di env server."
         error={resetError}
         onCancel={() => { if (!resetting) { setConfirmReset(false); setResetError(''); } }}
         onConfirm={confirmResetVotes}

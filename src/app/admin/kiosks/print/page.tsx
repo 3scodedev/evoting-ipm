@@ -84,8 +84,8 @@ function TokenCard({ token, kioskName, hostUrl }: { token: string; kioskName: st
       {/* Kop kartu */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <Image src="/images/logo-ipm.png" alt="Logo IPM" width={330} height={639} className="h-[6mm] w-auto" />
-          <Image src="/images/logo-smk.png" alt="Logo SMK" width={264} height={384} className="h-[6mm] w-auto" />
+          <Image src="/images/logo-ipm-sm.webp" alt="Logo IPM" width={96} height={96} unoptimized className="h-[6mm] w-auto" />
+          <Image src="/images/logo-smk-sm.webp" alt="Logo SMK" width={96} height={96} unoptimized className="h-[6mm] w-auto" />
         </div>
         <div className="text-right leading-[1.25]">
           <p className="text-[8px] font-extrabold uppercase tracking-[0.15em] text-ink">E-Voting IPM</p>
