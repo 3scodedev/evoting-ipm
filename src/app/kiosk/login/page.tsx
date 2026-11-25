@@ -55,7 +55,7 @@ export default function KioskLoginPage() {
         </Link>
         <span className="app-chip bg-brand-yellow text-[10px]">
           <Zap className="h-3 w-3" fill="currentColor" aria-hidden />
-          Pemilihan 2026/2027
+          Pemilihan 2027/2028
         </span>
       </div>
 

@@ -65,7 +65,7 @@ export default function Home() {
           <div className={s.headerRight}>
             <span className={s.yearPill}>
               <span className={s.liveDot} aria-hidden="true" />
-              Pemilihan 2026/2027
+              Pemilihan 2027/2028
             </span>
             <Link href="/admin/login" className={s.headerLink} prefetch={false}>
               Command Center
@@ -78,7 +78,7 @@ export default function Home() {
           <div className={s.tickerTrack}>
             {Array.from({ length: 4 }).map((_, i) => (
               <span className={s.tickerItem} key={i}>
-                Pemilihan Ketua IPM 2026/2027
+                Pemilihan Ketua IPM 2027/2028
                 <i className={s.tickerDot} />
                 Bilik aman &amp; terenkripsi
                 <i className={s.tickerDot} />
@@ -97,7 +97,7 @@ export default function Home() {
               <span className={s.eyebrowIcon}>
                 <Zap className="h-3 w-3" fill="currentColor" aria-hidden="true" />
               </span>
-              Pemilihan Ketua IPM · 2026/2027
+              Pemilihan Ketua IPM · 2027/2028
             </p>
 
             <h1 id="hero-title" className={s.title}>
@@ -208,7 +208,7 @@ export default function Home() {
           </span>
           <span className={s.footerRight}>
             <Zap className="h-3 w-3" fill="currentColor" aria-hidden="true" />
-            IPM 2026
+            IPM 2027
           </span>
         </footer>
       </div>

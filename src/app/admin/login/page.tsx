@@ -59,7 +59,7 @@ export default function AdminLoginPage() {
           <div className={s.stageTop}>
             <span className={s.kicker}>
               <Zap className="h-3 w-3" fill="currentColor" aria-hidden />
-              Pemilihan 2026/2027
+              Pemilihan 2027/2028
             </span>
             <span className={s.sticker} aria-hidden="true">
               <span>
